@@ -9,7 +9,7 @@ pub const NODE_SEND_CHANNEL_SIZE: usize = 1024;
 
 /// Network configuration
 #[derive(Debug, Deserialize, Clone)]
-pub struct NetworkConfig {
+pub struct NetworkSettings {
     /// Where to listen for communications.
     pub bind: SocketAddr,
     /// Our own IP if it is routable, else None.

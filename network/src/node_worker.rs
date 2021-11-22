@@ -2,8 +2,8 @@
 
 use super::{
     binders::{ReadBinder, WriteBinder},
-    config::{NetworkConfig, NODE_SEND_CHANNEL_SIZE},
     messages::Message,
+    settings::{NetworkSettings, NODE_SEND_CHANNEL_SIZE},
 };
 use crate::{error::NetworkError, ConnectionClosureReason};
 use logging::massa_trace;
@@ -70,7 +70,7 @@ pub struct NodeEvent(pub NodeId, pub NodeEventType);
 /// One worker per node.
 pub struct NodeWorker {
     /// Protocol configuration.
-    cfg: NetworkConfig,
+    cfg: NetworkSettings, // TODO: should be a &'static
     /// Node id associated to that worker.
     node_id: NodeId,
     /// Reader for incoming data.
@@ -87,7 +87,7 @@ impl NodeWorker {
     /// Creates a new node worker
     ///
     /// # Arguments
-    /// * cfg: Network configuration.
+    /// * network_settings: Network configuration.
     /// * serialization_context: SerializationContext instance
     /// * node_id: Node id associated to that worker.
     /// * socket_reader: Reader for incoming data.
@@ -95,7 +95,7 @@ impl NodeWorker {
     /// * node_command_rx: Channel to receive node commands.
     /// * node_event_tx: Channel to send node events.
     pub fn new(
-        cfg: NetworkConfig,
+        cfg: NetworkSettings, // TODO: should be a &'static
         node_id: NodeId,
         socket_reader: ReadBinder,
         socket_writer: WriteBinder,

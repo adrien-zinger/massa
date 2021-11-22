@@ -706,7 +706,7 @@ pub async fn consensus_pool_test<F, V>(
     // launch consensus controller
     let (consensus_command_sender, consensus_event_receiver, consensus_manager) =
         start_consensus_controller(
-            cfg.clone(),
+            cfg,
             protocol_command_sender,
             protocol_event_receiver,
             pool_command_sender,
@@ -763,7 +763,7 @@ where
     // launch consensus controller
     let (consensus_command_sender, consensus_event_receiver, consensus_manager) =
         start_consensus_controller(
-            cfg.clone(),
+            cfg,
             protocol_command_sender,
             protocol_event_receiver,
             pool_command_sender,

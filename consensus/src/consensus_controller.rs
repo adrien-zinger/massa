@@ -1,12 +1,15 @@
 // Copyright (c) 2021 MASSA LABS <info@massa.net>
 
-use std::{collections::VecDeque, path::Path};
-
-use tokio::{
-    sync::{mpsc, oneshot},
-    task::JoinHandle,
+use super::{
+    block_graph::*,
+    consensus_worker::{
+        ConsensusCommand, ConsensusEvent, ConsensusManagementCommand, ConsensusWorker,
+    },
+    pos::ProofOfStake,
+    settings::{ConsensusConfig, CHANNEL_SIZE},
 };
-
+use crate::error::ConsensusError;
+use crate::pos::ExportProofOfStake;
 use models::{
     address::{AddressHashMap, AddressHashSet, AddressState},
     BlockHashMap, OperationHashMap, OperationHashSet,
@@ -16,17 +19,10 @@ use models::{Address, Block, BlockId, OperationSearchResult, Slot, StakersCycleP
 use pool::PoolCommandSender;
 use protocol_exports::{ProtocolCommandSender, ProtocolEventReceiver};
 use signature::{derive_public_key, PrivateKey, PublicKey};
-
-use crate::error::ConsensusError;
-use crate::pos::ExportProofOfStake;
-
-use super::{
-    block_graph::*,
-    config::{ConsensusConfig, CHANNEL_SIZE},
-    consensus_worker::{
-        ConsensusCommand, ConsensusEvent, ConsensusManagementCommand, ConsensusWorker,
-    },
-    pos::ProofOfStake,
+use std::{collections::VecDeque, path::Path};
+use tokio::{
+    sync::{mpsc, oneshot},
+    task::JoinHandle,
 };
 use tracing::{debug, error, info};
 
@@ -37,7 +33,7 @@ use tracing::{debug, error, info};
 /// * protocol_command_sender: a ProtocolCommandSender instance to send commands to Protocol.
 /// * protocol_event_receiver: a ProtocolEventReceiver instance to receive events from Protocol.
 pub async fn start_consensus_controller(
-    cfg: ConsensusConfig,
+    cfg: ConsensusConfig, // TODO: should be a &'static ConsensusSettings
     protocol_command_sender: ProtocolCommandSender,
     protocol_event_receiver: ProtocolEventReceiver,
     pool_command_sender: PoolCommandSender,

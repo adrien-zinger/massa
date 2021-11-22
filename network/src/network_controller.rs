@@ -1,40 +1,36 @@
 // Copyright (c) 2021 MASSA LABS <info@massa.net>
 
+use super::{
+    establisher::Establisher,
+    network_worker::{
+        NetworkCommand, NetworkEvent, NetworkManagementCommand, NetworkWorker, Peers,
+    },
+    peer_info_database::*,
+    settings::{NetworkSettings, CHANNEL_SIZE},
+    BootstrapPeers,
+};
+use crate::error::NetworkError;
+use logging::massa_trace;
+use models::stats::NetworkStats;
+use models::{crypto::PubkeySig, node::NodeId};
+use models::{Block, BlockHeader, BlockId, Endorsement, Operation, Version};
+use signature::{derive_public_key, generate_random_private_key, PrivateKey};
 use std::{
     collections::{HashMap, VecDeque},
     net::IpAddr,
 };
-
-use logging::massa_trace;
 use tokio::{
     sync::{mpsc, oneshot},
     task::JoinHandle,
 };
 use tracing::{debug, error, info, warn};
 
-use models::stats::NetworkStats;
-use models::{crypto::PubkeySig, node::NodeId};
-use models::{Block, BlockHeader, BlockId, Endorsement, Operation, Version};
-use signature::{derive_public_key, generate_random_private_key, PrivateKey};
-
-use crate::error::NetworkError;
-
-use super::{
-    config::{NetworkConfig, CHANNEL_SIZE},
-    establisher::Establisher,
-    network_worker::{
-        NetworkCommand, NetworkEvent, NetworkManagementCommand, NetworkWorker, Peers,
-    },
-    peer_info_database::*,
-    BootstrapPeers,
-};
-
 /// Starts a new NetworkWorker in a spawned task
 ///
 /// # Arguments
 /// * cfg : network configuration
 pub async fn start_network_controller(
-    cfg: NetworkConfig,
+    network_settings: &'static NetworkSettings,
     mut establisher: Establisher,
     clock_compensation: i64,
     initial_peers: Option<BootstrapPeers>,
@@ -52,16 +48,16 @@ pub async fn start_network_controller(
     debug!("starting network controller");
 
     // check that local IP is routable
-    if let Some(self_ip) = cfg.routable_ip {
+    if let Some(self_ip) = network_settings.routable_ip {
         if !self_ip.is_global() {
             return Err(NetworkError::InvalidIpError(self_ip));
         }
     }
 
     // try to read node private key from file, otherwise generate it & write to file. Then derive nodeId
-    let private_key = if std::path::Path::is_file(&cfg.private_key_file) {
+    let private_key = if std::path::Path::is_file(&network_settings.private_key_file) {
         // file exists: try to load it
-        let private_key_bs58_check = tokio::fs::read_to_string(&cfg.private_key_file)
+        let private_key_bs58_check = tokio::fs::read_to_string(&network_settings.private_key_file)
             .await
             .map_err(|err| {
                 std::io::Error::new(
@@ -78,7 +74,12 @@ pub async fn start_network_controller(
     } else {
         // node file does not exist: generate the key and save it
         let priv_key = generate_random_private_key();
-        if let Err(e) = tokio::fs::write(&cfg.private_key_file, &priv_key.to_bs58_check()).await {
+        if let Err(e) = tokio::fs::write(
+            &network_settings.private_key_file,
+            &priv_key.to_bs58_check(),
+        )
+        .await
+        {
             warn!("could not generate node private key file: {}", e);
         }
         priv_key
@@ -90,11 +91,11 @@ pub async fn start_network_controller(
     massa_trace!("self_node_id", { "node_id": self_node_id });
 
     // create listener
-    let listener = establisher.get_listener(cfg.bind).await?;
+    let listener = establisher.get_listener(network_settings.bind).await?;
 
     debug!("Loading peer database");
     // load peer info database
-    let mut peer_info_db = PeerInfoDatabase::new(&cfg, clock_compensation).await?;
+    let mut peer_info_db = PeerInfoDatabase::new(&network_settings, clock_compensation).await?;
 
     // add initial peers
     if let Some(peers) = initial_peers {
@@ -105,10 +106,9 @@ pub async fn start_network_controller(
     let (command_tx, command_rx) = mpsc::channel::<NetworkCommand>(CHANNEL_SIZE);
     let (event_tx, event_rx) = mpsc::channel::<NetworkEvent>(CHANNEL_SIZE);
     let (manager_tx, manager_rx) = mpsc::channel::<NetworkManagementCommand>(1);
-    let cfg_copy = cfg.clone();
     let join_handle = tokio::spawn(async move {
         let res = NetworkWorker::new(
-            cfg_copy,
+            network_settings,
             private_key,
             self_node_id,
             listener,

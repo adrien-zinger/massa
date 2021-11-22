@@ -7,7 +7,7 @@ use crate::handshake_worker::HandshakeWorker;
 use crate::messages::Message;
 use crate::start_network_controller;
 use crate::{
-    NetworkCommandSender, NetworkConfig, NetworkEvent, NetworkEventReceiver, NetworkManager,
+    NetworkCommandSender, NetworkEvent, NetworkEventReceiver, NetworkManager, NetworkSettings,
     PeerInfo,
 };
 use crypto::hash::Hash;
@@ -55,7 +55,7 @@ fn get_temp_private_key_file() -> NamedTempFile {
 pub fn create_network_config(
     network_controller_port: u16,
     peers_file_path: &Path,
-) -> NetworkConfig {
+) -> NetworkSettings {
     // Init the serialization context with a default,
     // can be overwritten with a more specific one in the test.
     models::init_serialization_context(models::SerializationContext {
@@ -77,7 +77,7 @@ pub fn create_network_config(
         max_block_endorsments: 8,
     });
 
-    NetworkConfig {
+    NetworkSettings {
         bind: format!("0.0.0.0:{}", network_controller_port)
             .parse()
             .unwrap(),
@@ -385,7 +385,7 @@ pub fn get_transaction(expire_period: u64, fee: u64) -> (Operation, u8) {
 }
 
 /// Runs a consensus test, passing a mock pool controller to it.
-pub async fn network_test<F, V>(cfg: NetworkConfig, temp_peers_file: NamedTempFile, test: F)
+pub async fn network_test<F, V>(network_settings: &'static NetworkSettings, test: F)
 where
     F: FnOnce(
         NetworkCommandSender,
@@ -408,7 +408,7 @@ where
     // launch network controller
     let (network_event_sender, network_event_receiver, network_manager, _private_key, _node_id) =
         start_network_controller(
-            cfg.clone(),
+            network_settings,
             establisher,
             0,
             None,
@@ -435,6 +435,4 @@ where
     for conn_drain in conn_to_drain_list {
         tools::incoming_message_drain_stop(conn_drain).await;
     }
-
-    temp_peers_file.close().unwrap();
 }

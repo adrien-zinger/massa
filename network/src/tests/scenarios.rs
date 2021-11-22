@@ -5,9 +5,9 @@ use super::tools;
 use crate::binders::{ReadBinder, WriteBinder};
 use crate::messages::Message;
 use crate::node_worker::{NodeCommand, NodeEvent, NodeWorker};
-use crate::ConnectionClosureReason;
 use crate::NetworkEvent;
 use crate::PeerInfo;
+use crate::{ConnectionClosureReason, NetworkSettings};
 use crypto::{self, hash::Hash};
 use models::node::NodeId;
 use models::{BlockId, Endorsement, EndorsementContent, SerializeCompact, Slot};
@@ -79,6 +79,99 @@ async fn test_node_worker_shutdown() {
     node_fn_handle.await.unwrap().unwrap();
 }
 
+lazy_static::lazy_static! {
+    pub static ref NETWORK_SETTINGS_A: (NetworkSettings, u16) = {
+        let bind_port: u16 = 50_000;
+        let temp_peers_file = super::tools::generate_peers_file(&vec![]);
+        let mut network_conf = super::tools::create_network_config(bind_port, &temp_peers_file.path());
+        network_conf.max_in_nonbootstrap_connections = 2;
+        network_conf.max_in_connections_per_ip = 1;
+        (network_conf, bind_port)
+    };
+
+    pub static ref NETWORK_SETTINGS_B: (NetworkSettings, SocketAddr) = {
+        let bind_port: u16 = 50_000;
+        let mock_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(169, 202, 0, 11)), bind_port);
+        // add advertised peer to controller
+        let temp_peers_file = super::tools::generate_peers_file(&vec![PeerInfo {
+            ip: mock_addr.ip(),
+            banned: false,
+            bootstrap: false,
+            last_alive: None,
+            last_failure: None,
+            advertised: true,
+            active_out_connection_attempts: 0,
+            active_out_connections: 0,
+            active_in_connections: 0,
+        }]);
+        let mut network_conf = super::tools::create_network_config(bind_port, &temp_peers_file.path());
+        network_conf.wakeup_interval = 1000.into();
+        (network_conf, mock_addr)
+    };
+
+    pub static ref NETWORK_SETTINGS_C: (NetworkSettings, SocketAddr) = {
+        let bind_port: u16 = 50_000;
+        let mock_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(169, 202, 0, 12)), bind_port);
+        let mock_ignore_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(169, 202, 0, 13)), bind_port);
+        let temp_peers_file = super::tools::generate_peers_file(&vec![PeerInfo {
+            ip: mock_ignore_addr.ip(),
+            banned: false,
+            bootstrap: true,
+            last_alive: None,
+            last_failure: None,
+            advertised: false,
+            active_out_connection_attempts: 0,
+            active_out_connections: 0,
+            active_in_connections: 0,
+        }]);
+        let mut network_conf = super::tools::create_network_config(bind_port, &temp_peers_file.path());
+        network_conf.wakeup_interval = UTime::from(500);
+        network_conf.connect_timeout = UTime::from(2000);
+        (network_conf, mock_addr)
+    };
+
+    pub static ref NETWORK_SETTINGS_D: (NetworkSettings, SocketAddr) = {
+        let bind_port: u16 = 50_000;
+        let mock_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(169, 202, 0, 11)), bind_port);
+        // add advertised peer to controller
+        let temp_peers_file = super::tools::generate_peers_file(&vec![PeerInfo {
+            ip: mock_addr.ip(),
+            banned: false,
+            bootstrap: true,
+            last_alive: None,
+            last_failure: None,
+            advertised: true,
+            active_out_connection_attempts: 0,
+            active_out_connections: 0,
+            active_in_connections: 0,
+        }]);
+        let mut network_conf = super::tools::create_network_config(bind_port, &temp_peers_file.path());
+        network_conf.target_bootstrap_connections = 1;
+        network_conf.max_ask_blocks_per_message = 3;
+        (network_conf, mock_addr)
+    };
+
+    pub static ref NETWORK_SETTINGS_E: (NetworkSettings, SocketAddr) = {
+        let bind_port: u16 = 50_000;
+        let mock_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(169, 202, 0, 11)), bind_port);
+        // add advertised peer to controller
+        let temp_peers_file = super::tools::generate_peers_file(&vec![PeerInfo {
+            ip: mock_addr.ip(),
+            banned: false,
+            bootstrap: true,
+            last_alive: None,
+            last_failure: None,
+            advertised: true,
+            active_out_connection_attempts: 0,
+            active_out_connections: 0,
+            active_in_connections: 0,
+        }]);
+        let mut network_conf = super::tools::create_network_config(bind_port, &temp_peers_file.path());
+        network_conf.target_bootstrap_connections = 1;
+        (network_conf, mock_addr)
+    };
+}
+
 // test connecting two different peers simultaneously to the controller
 // then attempt to connect to controller from an already connected peer to test max_in_connections_per_ip
 // then try to connect a third peer to test max_in_connection
@@ -93,19 +186,14 @@ async fn test_multiple_connections_to_controller() {
     .unwrap();*/
 
     // test config
-    let bind_port: u16 = 50_000;
-    let temp_peers_file = super::tools::generate_peers_file(&vec![]);
-    let mut network_conf = super::tools::create_network_config(bind_port, &temp_peers_file.path());
-    network_conf.max_in_nonbootstrap_connections = 2;
-    network_conf.max_in_connections_per_ip = 1;
+    let (network_conf, bind_port): &(NetworkSettings, u16) = &NETWORK_SETTINGS_A;
 
-    let mock1_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(169, 202, 0, 11)), bind_port);
-    let mock2_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(169, 202, 0, 12)), bind_port);
-    let mock3_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(169, 202, 0, 13)), bind_port);
+    let mock1_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(169, 202, 0, 11)), *bind_port);
+    let mock2_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(169, 202, 0, 12)), *bind_port);
+    let mock3_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(169, 202, 0, 13)), *bind_port);
 
     tools::network_test(
-        network_conf.clone(),
-        temp_peers_file,
+        &network_conf,
         async move |_network_command_sender,
                     mut network_event_receiver,
                     network_manager,
@@ -192,28 +280,10 @@ async fn test_peer_ban() {
         .unwrap();*/
 
     // test config
-    let bind_port: u16 = 50_000;
-
-    let mock_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(169, 202, 0, 11)), bind_port);
-    // add advertised peer to controller
-    let temp_peers_file = super::tools::generate_peers_file(&vec![PeerInfo {
-        ip: mock_addr.ip(),
-        banned: false,
-        bootstrap: false,
-        last_alive: None,
-        last_failure: None,
-        advertised: true,
-        active_out_connection_attempts: 0,
-        active_out_connections: 0,
-        active_in_connections: 0,
-    }]);
-
-    let mut network_conf = super::tools::create_network_config(bind_port, &temp_peers_file.path());
-    network_conf.wakeup_interval = 1000.into();
+    let (network_conf, mock_addr): &(NetworkSettings, SocketAddr) = &NETWORK_SETTINGS_B;
 
     tools::network_test(
-        network_conf.clone(),
-        temp_peers_file,
+        &network_conf,
         async move |network_command_sender,
                     mut network_event_receiver,
                     network_manager,
@@ -222,7 +292,7 @@ async fn test_peer_ban() {
             let (conn1_id, conn1_r, conn1_w) = tools::full_connection_from_controller(
                 &mut network_event_receiver,
                 &mut mock_interface,
-                mock_addr,
+                *mock_addr,
                 1_000u64,
                 1_000u64,
                 1_000u64,
@@ -236,7 +306,7 @@ async fn test_peer_ban() {
             let (_conn2_id, conn2_r, conn2_w) = tools::full_connection_to_controller(
                 &mut network_event_receiver,
                 &mut mock_interface,
-                mock_addr,
+                *mock_addr,
                 1_000u64,
                 1_000u64,
                 1_000u64,
@@ -271,7 +341,7 @@ async fn test_peer_ban() {
             tools::rejected_connection_to_controller(
                 &mut network_event_receiver,
                 &mut mock_interface,
-                mock_addr,
+                *mock_addr,
                 1_000u64,
                 1_000u64,
                 1_000u64,
@@ -291,7 +361,7 @@ async fn test_peer_ban() {
             let (_conn1_id, conn1_r, _conn1_w) = tools::full_connection_from_controller(
                 &mut network_event_receiver,
                 &mut mock_interface,
-                mock_addr,
+                *mock_addr,
                 1_000u64,
                 1_000u64,
                 1_000u64,
@@ -331,28 +401,10 @@ async fn test_peer_ban_by_ip() {
         .unwrap();*/
 
     // test config
-    let bind_port: u16 = 50_000;
-
-    let mock_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(169, 202, 0, 11)), bind_port);
-    // add advertised peer to controller
-    let temp_peers_file = super::tools::generate_peers_file(&vec![PeerInfo {
-        ip: mock_addr.ip(),
-        banned: false,
-        bootstrap: false,
-        last_alive: None,
-        last_failure: None,
-        advertised: true,
-        active_out_connection_attempts: 0,
-        active_out_connections: 0,
-        active_in_connections: 0,
-    }]);
-
-    let mut network_conf = super::tools::create_network_config(bind_port, &temp_peers_file.path());
-    network_conf.wakeup_interval = 1000.into();
+    let (network_conf, mock_addr): &(NetworkSettings, SocketAddr) = &NETWORK_SETTINGS_B;
 
     tools::network_test(
-        network_conf.clone(),
-        temp_peers_file,
+        &network_conf,
         async move |network_command_sender,
                     mut network_event_receiver,
                     network_manager,
@@ -361,7 +413,7 @@ async fn test_peer_ban_by_ip() {
             let (_, conn1_r, conn1_w) = tools::full_connection_from_controller(
                 &mut network_event_receiver,
                 &mut mock_interface,
-                mock_addr,
+                *mock_addr,
                 1_000u64,
                 1_000u64,
                 1_000u64,
@@ -375,7 +427,7 @@ async fn test_peer_ban_by_ip() {
             let (_conn2_id, conn2_r, conn2_w) = tools::full_connection_to_controller(
                 &mut network_event_receiver,
                 &mut mock_interface,
-                mock_addr,
+                *mock_addr,
                 1_000u64,
                 1_000u64,
                 1_000u64,
@@ -410,7 +462,7 @@ async fn test_peer_ban_by_ip() {
             tools::rejected_connection_to_controller(
                 &mut network_event_receiver,
                 &mut mock_interface,
-                mock_addr,
+                *mock_addr,
                 1_000u64,
                 1_000u64,
                 1_000u64,
@@ -430,7 +482,7 @@ async fn test_peer_ban_by_ip() {
             let (_conn1_id, conn1_r, _conn1_w) = tools::full_connection_from_controller(
                 &mut network_event_receiver,
                 &mut mock_interface,
-                mock_addr,
+                *mock_addr,
                 1_000u64,
                 1_000u64,
                 1_000u64,
@@ -469,27 +521,10 @@ async fn test_advertised_and_wakeup_interval() {
     .unwrap();*/
 
     // test config
-    let bind_port: u16 = 50_000;
-    let mock_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(169, 202, 0, 12)), bind_port);
-    let mock_ignore_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(169, 202, 0, 13)), bind_port);
-    let temp_peers_file = super::tools::generate_peers_file(&vec![PeerInfo {
-        ip: mock_ignore_addr.ip(),
-        banned: false,
-        bootstrap: true,
-        last_alive: None,
-        last_failure: None,
-        advertised: false,
-        active_out_connection_attempts: 0,
-        active_out_connections: 0,
-        active_in_connections: 0,
-    }]);
-    let mut network_conf = super::tools::create_network_config(bind_port, &temp_peers_file.path());
-    network_conf.wakeup_interval = UTime::from(500);
-    network_conf.connect_timeout = UTime::from(2000);
+    let (network_conf, mock_addr): &(NetworkSettings, SocketAddr) = &NETWORK_SETTINGS_C;
 
     tools::network_test(
-        network_conf.clone(),
-        temp_peers_file,
+        &network_conf,
         async move |_network_command_sender,
                     mut network_event_receiver,
                     network_manager,
@@ -499,7 +534,7 @@ async fn test_advertised_and_wakeup_interval() {
                 let (conn2_id, conn2_r, mut conn2_w) = tools::full_connection_to_controller(
                     &mut network_event_receiver,
                     &mut mock_interface,
-                    mock_addr,
+                    *mock_addr,
                     1_000u64,
                     1_000u64,
                     1_000u64,
@@ -537,7 +572,7 @@ async fn test_advertised_and_wakeup_interval() {
                 .await
                 .expect("wait_connection_attempt_from_controller timed out")
                 .expect("wait_connection_attempt_from_controller failed");
-                assert_eq!(addr, mock_addr, "unexpected connection attempt address");
+                assert_eq!(addr, *mock_addr, "unexpected connection attempt address");
                 accept_tx.send(false).expect("accept_tx failed");
             }
 
@@ -548,7 +583,7 @@ async fn test_advertised_and_wakeup_interval() {
                 let (conn_id, conn1_r, conn1_w) = tools::full_connection_from_controller(
                     &mut network_event_receiver,
                     &mut mock_interface,
-                    mock_addr,
+                    *mock_addr,
                     (network_conf.wakeup_interval.to_millis() as u128 * 3u128)
                         .try_into()
                         .unwrap(),
@@ -596,25 +631,7 @@ async fn test_block_not_found() {
     .unwrap();*/
 
     // test config
-    let bind_port: u16 = 50_000;
-
-    let mock_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(169, 202, 0, 11)), bind_port);
-    // add advertised peer to controller
-    let temp_peers_file = super::tools::generate_peers_file(&vec![PeerInfo {
-        ip: mock_addr.ip(),
-        banned: false,
-        bootstrap: true,
-        last_alive: None,
-        last_failure: None,
-        advertised: true,
-        active_out_connection_attempts: 0,
-        active_out_connections: 0,
-        active_in_connections: 0,
-    }]);
-
-    let mut network_conf = super::tools::create_network_config(bind_port, &temp_peers_file.path());
-    network_conf.target_bootstrap_connections = 1;
-    network_conf.max_ask_blocks_per_message = 3;
+    let (network_conf, mock_addr): &(NetworkSettings, SocketAddr) = &NETWORK_SETTINGS_D;
 
     // Overwrite the context.
     let mut serialization_context = models::get_serialization_context();
@@ -622,8 +639,7 @@ async fn test_block_not_found() {
     models::init_serialization_context(serialization_context);
 
     tools::network_test(
-        network_conf.clone(),
-        temp_peers_file,
+        &network_conf,
         async move |network_command_sender,
                     mut network_event_receiver,
                     network_manager,
@@ -632,7 +648,7 @@ async fn test_block_not_found() {
             let (conn1_id, mut conn1_r, mut conn1_w) = tools::full_connection_from_controller(
                 &mut network_event_receiver,
                 &mut mock_interface,
-                mock_addr,
+                *mock_addr,
                 1_000u64,
                 1_000u64,
                 1_000u64,
@@ -775,28 +791,10 @@ async fn test_retry_connection_closed() {
     .unwrap();*/
 
     // test config
-    let bind_port: u16 = 50_000;
-
-    let mock_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(169, 202, 0, 11)), bind_port);
-    // add advertised peer to controller
-    let temp_peers_file = super::tools::generate_peers_file(&vec![PeerInfo {
-        ip: mock_addr.ip(),
-        banned: false,
-        bootstrap: true,
-        last_alive: None,
-        last_failure: None,
-        advertised: true,
-        active_out_connection_attempts: 0,
-        active_out_connections: 0,
-        active_in_connections: 0,
-    }]);
-
-    let mut network_conf = super::tools::create_network_config(bind_port, &temp_peers_file.path());
-    network_conf.target_bootstrap_connections = 1;
+    let (network_conf, mock_addr): &(NetworkSettings, SocketAddr) = &NETWORK_SETTINGS_E;
 
     tools::network_test(
-        network_conf.clone(),
-        temp_peers_file,
+        &network_conf,
         async move |network_command_sender,
                     mut network_event_receiver,
                     network_manager,
@@ -804,7 +802,7 @@ async fn test_retry_connection_closed() {
             let (node_id, _read, _write) = tools::full_connection_to_controller(
                 &mut network_event_receiver,
                 &mut mock_interface,
-                mock_addr,
+                *mock_addr,
                 1_000u64,
                 1_000u64,
                 1_000u64,
@@ -872,25 +870,7 @@ async fn test_operation_messages() {
     .unwrap();*/
 
     // test config
-    let bind_port: u16 = 50_000;
-
-    let mock_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(169, 202, 0, 11)), bind_port);
-    // add advertised peer to controller
-    let temp_peers_file = super::tools::generate_peers_file(&vec![PeerInfo {
-        ip: mock_addr.ip(),
-        banned: false,
-        bootstrap: true,
-        last_alive: None,
-        last_failure: None,
-        advertised: true,
-        active_out_connection_attempts: 0,
-        active_out_connections: 0,
-        active_in_connections: 0,
-    }]);
-
-    let mut network_conf = super::tools::create_network_config(bind_port, &temp_peers_file.path());
-    network_conf.target_bootstrap_connections = 1;
-    network_conf.max_ask_blocks_per_message = 3;
+    let (network_conf, mock_addr): &(NetworkSettings, SocketAddr) = &NETWORK_SETTINGS_D;
 
     // Overwrite the context.
     let mut serialization_context = models::get_serialization_context();
@@ -898,8 +878,7 @@ async fn test_operation_messages() {
     models::init_serialization_context(serialization_context);
 
     tools::network_test(
-        network_conf.clone(),
-        temp_peers_file,
+        &network_conf,
         async move |network_command_sender,
                     mut network_event_receiver,
                     network_manager,
@@ -908,7 +887,7 @@ async fn test_operation_messages() {
             let (conn1_id, mut conn1_r, mut conn1_w) = tools::full_connection_from_controller(
                 &mut network_event_receiver,
                 &mut mock_interface,
-                mock_addr,
+                *mock_addr,
                 1_000u64,
                 1_000u64,
                 1_000u64,
@@ -994,25 +973,7 @@ async fn test_endorsements_messages() {
     .unwrap();*/
 
     // test config
-    let bind_port: u16 = 50_000;
-
-    let mock_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(169, 202, 0, 11)), bind_port);
-    // add advertised peer to controller
-    let temp_peers_file = super::tools::generate_peers_file(&vec![PeerInfo {
-        ip: mock_addr.ip(),
-        banned: false,
-        bootstrap: true,
-        last_alive: None,
-        last_failure: None,
-        advertised: true,
-        active_out_connection_attempts: 0,
-        active_out_connections: 0,
-        active_in_connections: 0,
-    }]);
-
-    let mut network_conf = super::tools::create_network_config(bind_port, &temp_peers_file.path());
-    network_conf.target_bootstrap_connections = 1;
-    network_conf.max_ask_blocks_per_message = 3;
+    let (network_conf, mock_addr): &(NetworkSettings, SocketAddr) = &NETWORK_SETTINGS_D;
 
     // Overwrite the context.
     let mut serialization_context = models::get_serialization_context();
@@ -1020,8 +981,7 @@ async fn test_endorsements_messages() {
     models::init_serialization_context(serialization_context);
 
     tools::network_test(
-        network_conf.clone(),
-        temp_peers_file,
+        &network_conf,
         async move |network_command_sender,
                     mut network_event_receiver,
                     network_manager,
@@ -1030,7 +990,7 @@ async fn test_endorsements_messages() {
             let (conn1_id, mut conn1_r, mut conn1_w) = tools::full_connection_from_controller(
                 &mut network_event_receiver,
                 &mut mock_interface,
-                mock_addr,
+                *mock_addr,
                 1_000u64,
                 1_000u64,
                 1_000u64,

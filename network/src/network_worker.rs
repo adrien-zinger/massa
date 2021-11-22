@@ -3,11 +3,11 @@
 //! The network worker actually does the job of managing connections
 use super::{
     common::{ConnectionClosureReason, ConnectionId},
-    config::{NetworkConfig, CHANNEL_SIZE},
     establisher::{Establisher, Listener, ReadHalf, WriteHalf},
     handshake_worker::{HandshakeReturnType, HandshakeWorker},
     node_worker::{NodeCommand, NodeEvent, NodeEventType, NodeWorker},
     peer_info_database::*,
+    settings::{NetworkSettings, CHANNEL_SIZE},
 };
 use crate::error::{HandshakeErrorType, NetworkError};
 use crypto::hash::Hash;
@@ -182,7 +182,7 @@ impl DeserializeCompact for BootstrapPeers {
 /// Real job is done by network worker
 pub struct NetworkWorker {
     /// Network configuration.
-    cfg: NetworkConfig,
+    network_settings: &'static NetworkSettings,
     /// Our private key.
     private_key: PrivateKey,
     /// Our node id.
@@ -221,7 +221,7 @@ impl NetworkWorker {
     /// Creates a new NetworkWorker
     ///
     /// # Arguments
-    /// * cfg: Network configuration.
+    /// * network_settings: Network configuration.
     /// * listener: Listener part of the establisher.
     /// * establisher: The connection establisher.
     /// * peer_info_db: Database with peer information.
@@ -229,7 +229,7 @@ impl NetworkWorker {
     /// * controller_event_tx: Channel sending out network events.
     /// * controller_manager_rx: Channel receiving network management commands.
     pub fn new(
-        cfg: NetworkConfig,
+        network_settings: &'static NetworkSettings,
         private_key: PrivateKey,
         self_node_id: NodeId,
         listener: Listener,
@@ -242,7 +242,7 @@ impl NetworkWorker {
     ) -> NetworkWorker {
         let (node_event_tx, node_event_rx) = mpsc::channel::<NodeEvent>(CHANNEL_SIZE);
         NetworkWorker {
-            cfg,
+            network_settings,
             self_node_id,
             private_key,
             listener,
@@ -265,7 +265,7 @@ impl NetworkWorker {
     async fn send_network_event(&self, event: NetworkEvent) -> Result<(), NetworkError> {
         let result = self
             .controller_event_tx
-            .send_timeout(event, self.cfg.max_send_wait.to_duration())
+            .send_timeout(event, self.network_settings.max_send_wait.to_duration())
             .await;
         match result {
             Ok(()) => return Ok(()),
@@ -289,7 +289,8 @@ impl NetworkWorker {
         let mut cur_connection_id = ConnectionId::default();
 
         // wake up the controller at a regular interval to retry connections
-        let mut wakeup_interval = tokio::time::interval(self.cfg.wakeup_interval.to_duration());
+        let mut wakeup_interval =
+            tokio::time::interval(self.network_settings.wakeup_interval.to_duration());
         let mut need_connect_retry = true;
 
         loop {
@@ -302,9 +303,9 @@ impl NetworkWorker {
                     self.peer_info_db.new_out_connection_attempt(&ip)?;
                     let mut connector = self
                         .establisher
-                        .get_connector(self.cfg.connect_timeout)
+                        .get_connector(self.network_settings.connect_timeout)
                         .await?;
-                    let addr = SocketAddr::new(ip, self.cfg.protocol_port);
+                    let addr = SocketAddr::new(ip, self.network_settings.protocol_port);
                     out_connecting_futures.push(async move {
                         match connector.connect(addr).await {
                             Ok((reader, writer)) => (addr.ip(), Ok((reader, writer))),
@@ -538,7 +539,7 @@ impl NetworkWorker {
                         let (node_command_tx, node_command_rx) =
                             mpsc::channel::<NodeCommand>(CHANNEL_SIZE);
                         let node_event_tx_clone = self.node_event_tx.clone();
-                        let cfg_copy = self.cfg.clone();
+                        let cfg_copy = self.network_settings.clone(); // TODO: get rid of this clone() ...
                         let node_fn_handle = tokio::spawn(async move {
                             let res = NodeWorker::new(
                                 cfg_copy,
@@ -615,7 +616,7 @@ impl NetworkWorker {
 
         let self_node_id = self.self_node_id;
         let private_key = self.private_key;
-        let message_timeout = self.cfg.message_timeout;
+        let message_timeout = self.network_settings.message_timeout;
         let connection_id_copy = connection_id;
         let version = self.version;
         let handshake_fn_handle = tokio::spawn(async move {
