@@ -1,0 +1,1 @@
+initSidebarItems({"struct":[["LedgerChange","A balance change that can be applied to an address"],["LedgerData",""]]});
