@@ -35,6 +35,11 @@ pretty_assertions = "1.0"
 serial_test = "0.5"
 stderrlog = "0.5"
 tempfile = "3.2"
+criterion = { version = "0.3.5", features = ["async", "async_tokio", "async_futures"] }
+
+[[bench]]
+name = "consensus_benchmark"
+harness = false
 
 [features]
 test = []
