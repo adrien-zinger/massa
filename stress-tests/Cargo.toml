@@ -1,5 +1,5 @@
 [package]
-name = "massa_consensus"
+name = "stress_tests"
 version = "0.1.0"
 authors = ["Massa Labs <info@massa.net>"]
 edition = "2021"
@@ -29,12 +29,13 @@ massa_pool = { path = "../massa-pool" }
 massa_protocol_exports = { path = "../massa-protocol-exports" }
 massa_signature = { path = "../massa-signature" }
 massa_time = { path = "../massa-time" }
+massa_consensus = { path = "../massa-consensus" }
+tempfile = "3.2"
 
 [dev-dependencies]
 pretty_assertions = "1.0"
 serial_test = "0.5"
 stderrlog = "0.5"
-tempfile = "3.2"
 
 [features]
 test = []
