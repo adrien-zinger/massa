@@ -6,15 +6,9 @@ use super::{
     mock_pool_controller::{MockPoolController, PoolCommandSink},
     mock_protocol_controller::MockProtocolController,
 };
-use crate::{
-    block_graph::{BlockGraphExport, ExportActiveBlock},
-    pos::{RollCounts, RollUpdate, RollUpdates},
-    ConsensusConfig,
-};
-use crate::{
-    start_consensus_controller, BootstrapableGraph, ConsensusCommandSender, ConsensusEventReceiver,
-    ExportProofOfStake,
-};
+use crate::start_consensus_controller;
+use massa_consensus_exports::{ConsensusConfig, ConsensusCommandSender, ConsensusEventReceiver};
+use massa_graph::{export_active_block::ExportActiveBlock, BootstrapableGraph, BlockGraphExport};
 use massa_hash::hash::Hash;
 use massa_models::ledger::LedgerData;
 use massa_models::prehash::Set;
@@ -23,6 +17,7 @@ use massa_models::{
     EndorsementContent, Operation, OperationContent, OperationType, SerializeCompact, Slot,
 };
 use massa_pool::PoolCommand;
+use massa_proof_of_stake_exports::{RollCounts, RollUpdate, ExportProofOfStake, RollUpdates};
 use massa_protocol_exports::ProtocolCommand;
 use massa_signature::{
     derive_public_key, generate_random_private_key, sign, PrivateKey, PublicKey, Signature,

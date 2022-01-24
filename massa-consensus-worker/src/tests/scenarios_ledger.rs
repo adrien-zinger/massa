@@ -7,10 +7,10 @@ use super::{
     tools,
 };
 use crate::{
-    ledger::{Ledger, LedgerChanges},
     start_consensus_controller,
     tests::tools::{create_block_with_operations, create_transaction, generate_ledger_file},
 };
+use massa_graph::ledger::{Ledger, LedgerChanges};
 use massa_models::ledger::LedgerChange;
 use massa_models::ledger::LedgerData;
 use massa_models::{Address, Amount, Slot};
@@ -32,7 +32,7 @@ async fn test_ledger_init() {
         roll_counts_file.path(),
         staking_file.path(),
     );
-    let ledger = Ledger::new(cfg, None);
+    let ledger = Ledger::new((&cfg).into(), None);
     assert!(ledger.is_ok());
 }
 
@@ -48,7 +48,7 @@ async fn test_ledger_initializes_get_latest_final_periods() {
         roll_counts_file.path(),
         staking_file.path(),
     );
-    let ledger = Ledger::new(cfg, None).unwrap();
+    let ledger = Ledger::new((&cfg).into(), None).unwrap();
 
     for latest_final in ledger
         .get_latest_final_periods()
@@ -70,7 +70,7 @@ async fn test_ledger_final_balance_increment_new_address() {
         roll_counts_file.path(),
         staking_file.path(),
     );
-    let ledger = Ledger::new(cfg.clone(), None).unwrap();
+    let ledger = Ledger::new((&cfg).into(), None).unwrap();
 
     let private_key = generate_random_private_key();
     let public_key = derive_public_key(&private_key);
@@ -117,7 +117,7 @@ async fn test_ledger_final_balance_increment_address_above_max() {
         roll_counts_file.path(),
         staking_file.path(),
     );
-    let ledger = Ledger::new(cfg.clone(), None).unwrap();
+    let ledger = Ledger::new((&cfg).into(), None).unwrap();
 
     let private_key = generate_random_private_key();
     let public_key = derive_public_key(&private_key);
@@ -177,7 +177,7 @@ async fn test_ledger_final_balance_decrement_address_balance_to_zero() {
         roll_counts_file.path(),
         staking_file.path(),
     );
-    let ledger = Ledger::new(cfg.clone(), None).unwrap();
+    let ledger = Ledger::new((&cfg).into(), None).unwrap();
 
     let private_key = generate_random_private_key();
     let public_key = derive_public_key(&private_key);
@@ -250,7 +250,7 @@ async fn test_ledger_final_balance_decrement_address_below_zero() {
         roll_counts_file.path(),
         staking_file.path(),
     );
-    let ledger = Ledger::new(cfg.clone(), None).unwrap();
+    let ledger = Ledger::new((&cfg).into(), None).unwrap();
 
     let private_key = generate_random_private_key();
     let public_key = derive_public_key(&private_key);
@@ -337,7 +337,7 @@ async fn test_ledger_final_balance_decrement_non_existing_address() {
         roll_counts_file.path(),
         staking_file.path(),
     );
-    let ledger = Ledger::new(cfg.clone(), None).unwrap();
+    let ledger = Ledger::new((&cfg).into(), None).unwrap();
 
     let private_key = generate_random_private_key();
     let public_key = derive_public_key(&private_key);
@@ -371,7 +371,7 @@ async fn test_ledger_final_balance_non_existing_address() {
         roll_counts_file.path(),
         staking_file.path(),
     );
-    let ledger = Ledger::new(cfg, None).unwrap();
+    let ledger = Ledger::new((&cfg).into(), None).unwrap();
 
     let private_key = generate_random_private_key();
     let public_key = derive_public_key(&private_key);
@@ -399,7 +399,7 @@ async fn test_ledger_final_balance_duplicate_address() {
         roll_counts_file.path(),
         staking_file.path(),
     );
-    let ledger = Ledger::new(cfg, None).unwrap();
+    let ledger = Ledger::new((&cfg).into(), None).unwrap();
 
     let private_key = generate_random_private_key();
     let public_key = derive_public_key(&private_key);
@@ -431,7 +431,7 @@ async fn test_ledger_final_balance_multiple_addresses() {
         roll_counts_file.path(),
         staking_file.path(),
     );
-    let ledger = Ledger::new(cfg, None).unwrap();
+    let ledger = Ledger::new((&cfg).into(), None).unwrap();
 
     let mut addresses = vec![];
     for _ in 0..5 {
@@ -468,7 +468,7 @@ async fn test_ledger_clear() {
         roll_counts_file.path(),
         staking_file.path(),
     );
-    let ledger = Ledger::new(cfg.clone(), None).unwrap();
+    let ledger = Ledger::new((&cfg).into(), None).unwrap();
 
     let private_key = generate_random_private_key();
     let public_key = derive_public_key(&private_key);
@@ -526,7 +526,7 @@ async fn test_ledger_read_whole() {
         roll_counts_file.path(),
         staking_file.path(),
     );
-    let ledger = Ledger::new(cfg.clone(), None).unwrap();
+    let ledger = Ledger::new((&cfg).into(), None).unwrap();
 
     let private_key = generate_random_private_key();
     let public_key = derive_public_key(&private_key);

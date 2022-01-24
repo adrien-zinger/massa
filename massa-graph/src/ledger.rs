@@ -1,7 +1,4 @@
 // Copyright (c) 2021 MASSA LABS <info@massa.net>
-
-use crate::error::InternalError;
-use crate::{ConsensusConfig, ConsensusError};
 use massa_models::ledger::{LedgerChange, LedgerData};
 use massa_models::prehash::{BuildMap, Map, Set};
 use massa_models::{
@@ -16,6 +13,8 @@ use std::{
     usize,
 };
 
+use crate::{error::{LedgerResult as Result, GraphError, LedgerError, InternalError}, settings::LedgerConfig};
+
 /// Here we map an address to its balance.
 /// When a balance becomes final it is written on the disk.
 pub struct Ledger {
@@ -24,7 +23,16 @@ pub struct Ledger {
     /// containing (thread_number: u8, latest_final_period: u64)
     latest_final_periods: Tree,
     /// consensus related config
-    cfg: ConsensusConfig,
+    cfg: LedgerConfig,
+}
+
+/// Read the initial ledger.
+pub async fn read_genesis_ledger(ledger_config: &LedgerConfig) -> Result<Ledger> {
+    // load ledger from file
+    let ledger = serde_json::from_str::<LedgerSubset>(
+        &tokio::fs::read_to_string(&ledger_config.ledger_path).await?,
+    )?;
+    Ledger::new(ledger_config.to_owned(), Some(ledger))
 }
 
 /// Map an address to a LedgerChange
@@ -37,7 +45,7 @@ impl LedgerChanges {
     }
 
     /// applies a LedgerChange
-    pub fn apply(&mut self, addr: &Address, change: &LedgerChange) -> Result<(), ConsensusError> {
+    pub fn apply(&mut self, addr: &Address, change: &LedgerChange) -> Result<()> {
         match self.0.entry(*addr) {
             hash_map::Entry::Occupied(mut occ) => {
                 occ.get_mut().chain(change)?;
@@ -57,7 +65,7 @@ impl LedgerChanges {
     }
 
     /// chain with another LedgerChange
-    pub fn chain(&mut self, other: &LedgerChanges) -> Result<(), ConsensusError> {
+    pub fn chain(&mut self, other: &LedgerChanges) -> Result<()> {
         for (addr, change) in other.0.iter() {
             self.apply(addr, change)?;
         }
@@ -101,11 +109,11 @@ impl LedgerChanges {
         parent_creator: Address,
         reward: Amount,
         endorsement_count: u32,
-    ) -> Result<(), ConsensusError> {
+    ) -> Result<()> {
         let endorsers_count = endorsers.len() as u64;
         let third = reward
             .checked_div_u64(3 * (1 + (endorsement_count as u64)))
-            .ok_or(ConsensusError::AmountOverflowError)?;
+            .ok_or(LedgerError::AmountOverflowError)?;
         for ed in endorsers {
             self.apply(
                 &parent_creator,
@@ -124,15 +132,15 @@ impl LedgerChanges {
         }
         let total_credited = third
             .checked_mul_u64(2 * endorsers_count)
-            .ok_or(ConsensusError::AmountOverflowError)?;
+            .ok_or(LedgerError::AmountOverflowError)?;
         // here we credited only parent_creator and ed for every endorsement
         // total_credited now contains the total amount already credited
 
         let expected_credit = reward
             .checked_mul_u64(1 + endorsers_count)
-            .ok_or(ConsensusError::AmountOverflowError)?
+            .ok_or(LedgerError::AmountOverflowError)?
             .checked_div_u64(1 + (endorsement_count as u64))
-            .ok_or(ConsensusError::AmountOverflowError)?;
+            .ok_or(LedgerError::AmountOverflowError)?;
         // here expected_credit contains the expected amount that should be credited in total
         // the difference between expected_credit and total_credited is sent to the block creator
         self.apply(
@@ -163,7 +171,7 @@ pub trait OperationLedgerInterface {
         parent_creator: Address,
         roll_price: Amount,
         endorsement_count: u32,
-    ) -> Result<LedgerChanges, ConsensusError>;
+    ) -> Result<LedgerChanges>;
 }
 
 impl OperationLedgerInterface for Operation {
@@ -174,7 +182,7 @@ impl OperationLedgerInterface for Operation {
         parent_creator: Address,
         roll_price: Amount,
         endorsement_count: u32,
-    ) -> Result<LedgerChanges, ConsensusError> {
+    ) -> Result<LedgerChanges> {
         let mut res = LedgerChanges::default();
 
         // sender fee
@@ -223,7 +231,7 @@ impl OperationLedgerInterface for Operation {
                     &LedgerChange {
                         balance_delta: roll_price
                             .checked_mul_u64(*roll_count)
-                            .ok_or(ConsensusError::AmountOverflowError)?,
+                            .ok_or(LedgerError::AmountOverflowError)?,
                         balance_increment: false,
                     },
                 )?;
@@ -241,9 +249,9 @@ impl OperationLedgerInterface for Operation {
                     &LedgerChange {
                         balance_delta: gas_price
                             .checked_mul_u64(*max_gas)
-                            .ok_or(ConsensusError::AmountOverflowError)?
+                            .ok_or(LedgerError::AmountOverflowError)?
                             .checked_add(*coins)
-                            .ok_or(ConsensusError::AmountOverflowError)?,
+                            .ok_or(LedgerError::AmountOverflowError)?,
                         balance_increment: false,
                     },
                 )?;
@@ -258,9 +266,9 @@ impl Ledger {
     /// if no latest_final_periods in file, they are initialized at 0u64
     /// if there is a ledger in the given file, it is loaded
     pub fn new(
-        cfg: ConsensusConfig,
+        cfg: LedgerConfig,
         opt_init_data: Option<LedgerSubset>,
-    ) -> Result<Ledger, ConsensusError> {
+    ) -> Result<Ledger> {
         let sled_config = sled::Config::default()
             .path(&cfg.ledger_path)
             .cache_capacity(cfg.ledger_cache_capacity)
@@ -309,7 +317,7 @@ impl Ledger {
     }
 
     /// Returns the final ledger data of a list of unique addresses belonging to any thread.
-    pub fn get_final_data(&self, addresses: Set<Address>) -> Result<LedgerSubset, ConsensusError> {
+    pub fn get_final_data(&self, addresses: Set<Address>) -> Result<LedgerSubset> {
         self.ledger_per_thread
             .transaction(|ledger_per_thread| {
                 let mut result = LedgerSubset::default();
@@ -344,7 +352,7 @@ impl Ledger {
                 Ok(result)
             })
             .map_err(|_| {
-                ConsensusError::LedgerInconsistency(format!(
+                LedgerError::LedgerInconsistency(format!(
                     "Unable to fetch data for addresses {:?}",
                     addresses
                 ))
@@ -355,8 +363,8 @@ impl Ledger {
     pub fn from_export(
         export: LedgerSubset,
         latest_final_periods: Vec<u64>,
-        cfg: ConsensusConfig,
-    ) -> Result<Ledger, ConsensusError> {
+        cfg: LedgerConfig,
+    ) -> Result<Ledger> {
         let ledger = Ledger::new(cfg.clone(), None)?;
         ledger.clear()?;
 
@@ -367,7 +375,7 @@ impl Ledger {
                 .insert(address.into_bytes(), addr_data.to_bytes_compact()?)?
                 .is_some()
             {
-                return Err(ConsensusError::LedgerInconsistency(format!(
+                return Err(LedgerError::LedgerInconsistency(format!(
                     "adress {} already in ledger while bootsrapping",
                     address
                 )));
@@ -385,7 +393,7 @@ impl Ledger {
     }
 
     /// Returns the final balance of an address. 0 if the address does not exist.
-    pub fn get_final_balance(&self, address: &Address) -> Result<Amount, ConsensusError> {
+    pub fn get_final_balance(&self, address: &Address) -> Result<Amount> {
         let thread = address.get_thread(self.cfg.thread_count);
         if let Some(res) = self.ledger_per_thread[thread as usize].get(address.to_bytes())? {
             Ok(LedgerData::from_bytes_compact(&res)?.0.balance)
@@ -406,9 +414,9 @@ impl Ledger {
         thread: u8,
         changes: &LedgerChanges,
         latest_final_period: u64,
-    ) -> Result<(), ConsensusError> {
+    ) -> Result<()> {
         let ledger = self.ledger_per_thread.get(thread as usize).ok_or_else(|| {
-            ConsensusError::LedgerInconsistency(format!("missing ledger for thread {}", thread))
+            LedgerError::LedgerInconsistency(format!("missing ledger for thread {}", thread))
         })?;
 
         (ledger, &self.latest_final_periods).transaction(|(db, latest_final_periods_db)| {
@@ -469,7 +477,7 @@ impl Ledger {
     }
 
     /// returns the final periods.
-    pub fn get_latest_final_periods(&self) -> Result<Vec<u64>, ConsensusError> {
+    pub fn get_latest_final_periods(&self) -> Result<Vec<u64>> {
         self.latest_final_periods
             .transaction(|db| {
                 let mut res = Vec::with_capacity(self.cfg.thread_count as usize);
@@ -498,12 +506,12 @@ impl Ledger {
                 Ok(res)
             })
             .map_err(|_| {
-                ConsensusError::LedgerInconsistency("Unable to fetch latest final periods.".into())
+                LedgerError::LedgerInconsistency("Unable to fetch latest final periods.".into())
             })
     }
 
     /// To empty the db.
-    pub fn clear(&self) -> Result<(), ConsensusError> {
+    pub fn clear(&self) -> Result<()> {
         // Note: this cannot be done transactionally.
         for db in self.ledger_per_thread.iter() {
             db.clear()?;
@@ -514,7 +522,7 @@ impl Ledger {
 
     /// Used for bootstrap.
     /// Note: this cannot be done transactionally.
-    pub fn read_whole(&self) -> Result<LedgerSubset, ConsensusError> {
+    pub fn read_whole(&self) -> Result<LedgerSubset> {
         let mut res = LedgerSubset::default();
         for tree in self.ledger_per_thread.iter() {
             for element in tree.iter() {
@@ -522,7 +530,7 @@ impl Ledger {
                 let address = Address::from_bytes(addr.as_ref().try_into()?)?;
                 let (ledger_data, _) = LedgerData::from_bytes_compact(&data)?;
                 if let Some(val) = res.0.insert(address, ledger_data) {
-                    return Err(ConsensusError::LedgerInconsistency(format!(
+                    return Err(LedgerError::LedgerInconsistency(format!(
                         "address {:?} twice in ledger",
                         val
                     )));
@@ -536,7 +544,7 @@ impl Ledger {
     pub fn get_final_ledger_subset(
         &self,
         query_addrs: &Set<Address>,
-    ) -> Result<LedgerSubset, ConsensusError> {
+    ) -> Result<LedgerSubset> {
         let res = self.ledger_per_thread.transaction(|ledger_per_thread| {
             let mut data = LedgerSubset::default();
             for addr in query_addrs {
@@ -589,7 +597,7 @@ impl LedgerSubset {
         &mut self,
         addr: &Address,
         change: &LedgerChange,
-    ) -> Result<(), ConsensusError> {
+    ) -> Result<()> {
         match self.0.entry(*addr) {
             hash_map::Entry::Occupied(mut occ) => {
                 occ.get_mut().apply_change(change)?;
@@ -610,7 +618,7 @@ impl LedgerSubset {
 
     /// apply ledger changes
     ///  note: a failure may still leave the entry modified
-    pub fn apply_changes(&mut self, changes: &LedgerChanges) -> Result<(), ConsensusError> {
+    pub fn apply_changes(&mut self, changes: &LedgerChanges) -> Result<()> {
         for (addr, change) in changes.0.iter() {
             self.apply_change(addr, change)?;
         }
@@ -619,7 +627,7 @@ impl LedgerSubset {
 
     /// Applies thread changes change to that ledger subset
     /// note: a failure may still leave the entry modified
-    pub fn chain(&mut self, changes: &LedgerChanges) -> Result<(), ConsensusError> {
+    pub fn chain(&mut self, changes: &LedgerChanges) -> Result<()> {
         for (addr, change) in changes.0.iter() {
             self.apply_change(addr, change)?;
         }
@@ -657,7 +665,7 @@ impl LedgerSubset {
 }
 
 impl<'a> TryFrom<&'a Ledger> for LedgerSubset {
-    type Error = ConsensusError;
+    type Error = GraphError;
 
     fn try_from(value: &'a Ledger) -> Result<Self, Self::Error> {
         Ok(LedgerSubset(

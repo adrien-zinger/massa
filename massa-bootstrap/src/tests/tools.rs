@@ -3,10 +3,16 @@
 use super::mock_establisher::Duplex;
 use crate::settings::BootstrapSettings;
 use bitvec::prelude::*;
-use massa_consensus::ledger::LedgerChanges;
-use massa_consensus::{
-    BootstrapableGraph, ConsensusCommand, ExportActiveBlock, ExportProofOfStake, LedgerSubset,
-    RollCounts, RollUpdate, RollUpdates, ThreadCycleState,
+use massa_consensus_exports::commands::ConsensusCommand;
+use massa_graph::{
+    ledger::{LedgerChanges, LedgerSubset},
+    BootstrapableGraph, export_active_block::ExportActiveBlock,
+};
+use massa_proof_of_stake_exports::{
+    RollCounts, 
+    RollUpdate,
+    RollUpdates,
+    ThreadCycleState, ExportProofOfStake,
 };
 use massa_execution::{BootstrapExecutionState, ExecutionCommand, SCELedger, SCELedgerEntry};
 use massa_hash::hash::Hash;

@@ -1,16 +1,7 @@
 // Copyright (c) 2021 MASSA LABS <info@massa.net>
-use super::{
-    block_graph::*,
-    consensus_worker::{
-        ConsensusCommand, ConsensusEvent, ConsensusManagementCommand, ConsensusWorker,
-    },
-    pos::ProofOfStake,
-    settings::{ConsensusConfig, CHANNEL_SIZE},
-};
-use crate::error::ConsensusError;
-use crate::pos::ExportProofOfStake;
-use massa_execution::{ExecutionCommandSender, ExecutionEventReceiver};
+use massa_execution::ExecutionEventReceiver;
 
+use massa_graph::{BootstrapableGraph, BlockGraphExport, ExportBlockStatus, Status};
 use massa_models::{
     address::AddressState, api::EndorsementInfo, Endorsement, EndorsementId, OperationId,
 };
@@ -18,134 +9,21 @@ use massa_models::{clique::Clique, stats::ConsensusStats};
 use massa_models::{
     Address, Block, BlockId, OperationSearchResult, Slot, StakersCycleProductionStats,
 };
-use massa_pool::PoolCommandSender;
-use massa_protocol_exports::{ProtocolCommandSender, ProtocolEventReceiver};
-use massa_signature::{derive_public_key, PrivateKey, PublicKey};
+use massa_proof_of_stake_exports::ExportProofOfStake;
+use massa_protocol_exports::ProtocolEventReceiver;
+use massa_signature::PrivateKey;
 
-use std::{collections::VecDeque, path::Path};
+use std::collections::VecDeque;
 
 use massa_models::prehash::{Map, Set};
 use tokio::{
     sync::{mpsc, oneshot},
     task::JoinHandle,
 };
-use tracing::{debug, error, info};
 
-/// Creates a new consensus controller.
-///
-/// # Arguments
-/// * cfg: consensus configuration
-/// * protocol_command_sender: a ProtocolCommandSender instance to send commands to Protocol.
-/// * protocol_event_receiver: a ProtocolEventReceiver instance to receive events from Protocol.
-pub async fn start_consensus_controller(
-    cfg: ConsensusConfig,
-    execution_command_sender: ExecutionCommandSender,
-    execution_event_receiver: ExecutionEventReceiver,
-    protocol_command_sender: ProtocolCommandSender,
-    protocol_event_receiver: ProtocolEventReceiver,
-    pool_command_sender: PoolCommandSender,
-    boot_pos: Option<ExportProofOfStake>,
-    boot_graph: Option<BootstrapableGraph>,
-    clock_compensation: i64,
-) -> Result<
-    (
-        ConsensusCommandSender,
-        ConsensusEventReceiver,
-        ConsensusManager,
-    ),
-    ConsensusError,
-> {
-    debug!("starting consensus controller");
-    massa_trace!(
-        "consensus.consensus_controller.start_consensus_controller",
-        {}
-    );
+use crate::{ConsensusError, error::ConsensusResult as Result,
+    commands::{ConsensusCommand, ConsensusManagementCommand}, events::ConsensusEvent};
 
-    // todo that is checked when loading the config, should be removed
-    // ensure that the parameters are sane
-    if cfg.thread_count == 0 {
-        return Err(ConsensusError::ConfigError(
-            "thread_count shoud be strictly more than 0".to_string(),
-        ));
-    }
-    if cfg.t0 == 0.into() {
-        return Err(ConsensusError::ConfigError(
-            "t0 shoud be strictly more than 0".to_string(),
-        ));
-    }
-    if cfg.t0.checked_rem_u64(cfg.thread_count as u64)? != 0.into() {
-        return Err(ConsensusError::ConfigError(
-            "thread_count should divide t0".to_string(),
-        ));
-    }
-    let staking_keys = load_initial_staking_keys(&cfg.staking_keys_path).await?;
-
-    // start worker
-    let block_db = BlockGraph::new(cfg.clone(), boot_graph).await?;
-    let mut pos =
-        ProofOfStake::new(cfg.clone(), block_db.get_genesis_block_ids(), boot_pos).await?;
-    pos.set_watched_addresses(staking_keys.keys().copied().collect());
-    let (command_tx, command_rx) = mpsc::channel::<ConsensusCommand>(CHANNEL_SIZE);
-    let (event_tx, event_rx) = mpsc::channel::<ConsensusEvent>(CHANNEL_SIZE);
-    let (manager_tx, manager_rx) = mpsc::channel::<ConsensusManagementCommand>(1);
-    let cfg_copy = cfg.clone();
-    let join_handle = tokio::spawn(async move {
-        let res = ConsensusWorker::new(
-            cfg_copy,
-            protocol_command_sender,
-            protocol_event_receiver,
-            execution_event_receiver,
-            pool_command_sender,
-            execution_command_sender,
-            block_db,
-            pos,
-            command_rx,
-            event_tx,
-            manager_rx,
-            clock_compensation,
-            staking_keys,
-        )
-        .await?
-        .run_loop()
-        .await;
-        match res {
-            Err(err) => {
-                error!("consensus worker crashed: {}", err);
-                Err(err)
-            }
-            Ok(v) => {
-                info!("consensus worker finished cleanly");
-                Ok(v)
-            }
-        }
-    });
-    Ok((
-        ConsensusCommandSender(command_tx),
-        ConsensusEventReceiver(event_rx),
-        ConsensusManager {
-            manager_tx,
-            join_handle,
-        },
-    ))
-}
-
-async fn load_initial_staking_keys(
-    path: &Path,
-) -> Result<Map<Address, (PublicKey, PrivateKey)>, ConsensusError> {
-    if !std::path::Path::is_file(path) {
-        return Ok(Map::default());
-    }
-    serde_json::from_str::<Vec<PrivateKey>>(&tokio::fs::read_to_string(path).await?)?
-        .iter()
-        .map(|private_key| {
-            let public_key = derive_public_key(private_key);
-            Ok((
-                Address::from_public_key(&public_key),
-                (public_key, *private_key),
-            ))
-        })
-        .collect()
-}
 
 #[derive(Clone)]
 pub struct ConsensusCommandSender(pub mpsc::Sender<ConsensusCommand>);
@@ -160,7 +38,7 @@ impl ConsensusCommandSender {
         &self,
         slot_start: Option<Slot>,
         slot_end: Option<Slot>,
-    ) -> Result<BlockGraphExport, ConsensusError> {
+    ) -> Result<BlockGraphExport> {
         let (response_tx, response_rx) = oneshot::channel::<BlockGraphExport>();
         massa_trace!("consensus.consensus_controller.get_block_graph_status", {});
         self.0
@@ -602,10 +480,10 @@ impl ConsensusEventReceiver {
 }
 
 pub struct ConsensusManager {
-    join_handle:
+    pub join_handle:
         JoinHandle<Result<(ProtocolEventReceiver, ExecutionEventReceiver), ConsensusError>>,
 
-    manager_tx: mpsc::Sender<ConsensusManagementCommand>,
+    pub manager_tx: mpsc::Sender<ConsensusManagementCommand>,
 }
 
 impl ConsensusManager {

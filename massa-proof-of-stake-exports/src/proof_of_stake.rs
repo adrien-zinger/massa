@@ -1,338 +1,22 @@
-// Copyright (c) 2021 MASSA LABS <info@massa.net>
+use std::{collections::{hash_map, VecDeque, BTreeMap, HashMap}};
 
-#![doc = include_str!("../pos.md")]
-
-use crate::error::ConsensusError;
-use crate::{block_graph::ActiveBlock, ConsensusConfig};
-use bitvec::prelude::*;
+use bitvec::{prelude::BitVec, order::Lsb0};
 use massa_hash::hash::Hash;
-use massa_models::prehash::{BuildMap, Map, Set};
-use massa_models::{
-    array_from_slice, with_serialization_context, Address, Amount, BlockId, DeserializeCompact,
-    DeserializeVarInt, ModelsError, Operation, OperationType, SerializeCompact, SerializeVarInt,
-    Slot, StakersCycleProductionStats, ADDRESS_SIZE_BYTES,
-};
-use massa_signature::derive_public_key;
+use massa_models::{Address, prehash::{Set, Map}, Slot, BlockId, StakersCycleProductionStats, Amount};
 use num::rational::Ratio;
-use rand::distributions::Uniform;
-use rand::Rng;
-use rand_xoshiro::rand_core::SeedableRng;
+use rand::{distributions::Uniform, SeedableRng, Rng};
 use rand_xoshiro::Xoshiro256PlusPlus;
-use serde::{Deserialize, Serialize};
-use std::collections::{btree_map, hash_map, BTreeMap, HashMap, VecDeque};
-use std::convert::TryInto;
-use tracing::warn;
+use tracing::log::warn;
+use massa_signature::derive_public_key;
 
-#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
-pub struct RollCompensation(pub u64);
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct RollUpdate {
-    pub roll_purchases: u64,
-    pub roll_sales: u64,
-    // Here is space for registering any denunciations/resets
-}
-
-impl SerializeCompact for RollUpdate {
-    fn to_bytes_compact(&self) -> Result<Vec<u8>, ModelsError> {
-        let mut res: Vec<u8> = Vec::new();
-
-        // roll purchases
-        res.extend(self.roll_purchases.to_varint_bytes());
-
-        // roll sales
-        res.extend(self.roll_sales.to_varint_bytes());
-
-        Ok(res)
-    }
-}
-
-impl DeserializeCompact for RollUpdate {
-    fn from_bytes_compact(buffer: &[u8]) -> Result<(Self, usize), ModelsError> {
-        let mut cursor = 0usize;
-
-        // roll purchases
-        let (roll_purchases, delta) = u64::from_varint_bytes(&buffer[cursor..])?;
-        cursor += delta;
-
-        // roll sales
-        let (roll_sales, delta) = u64::from_varint_bytes(&buffer[cursor..])?;
-        cursor += delta;
-
-        Ok((
-            RollUpdate {
-                roll_purchases,
-                roll_sales,
-            },
-            cursor,
-        ))
-    }
-}
-
-impl RollUpdate {
-    /// chain two roll updates, compensate and return compensation count
-    fn chain(&mut self, change: &Self) -> Result<RollCompensation, ConsensusError> {
-        let compensation_other = std::cmp::min(change.roll_purchases, change.roll_sales);
-        self.roll_purchases = self
-            .roll_purchases
-            .checked_add(change.roll_purchases - compensation_other)
-            .ok_or_else(|| {
-                ConsensusError::InvalidRollUpdate(
-                    "roll_purchases overflow in RollUpdate::chain".into(),
-                )
-            })?;
-        self.roll_sales = self
-            .roll_sales
-            .checked_add(change.roll_sales - compensation_other)
-            .ok_or_else(|| {
-                ConsensusError::InvalidRollUpdate("roll_sales overflow in RollUpdate::chain".into())
-            })?;
-
-        let compensation_self = self.compensate().0;
-
-        let compensation_total = compensation_other
-            .checked_add(compensation_self)
-            .ok_or_else(|| {
-                ConsensusError::InvalidRollUpdate(
-                    "compensation overflow in RollUpdate::chain".into(),
-                )
-            })?;
-        Ok(RollCompensation(compensation_total))
-    }
-
-    /// compensate a roll update, return compensation count
-    pub fn compensate(&mut self) -> RollCompensation {
-        let compensation = std::cmp::min(self.roll_purchases, self.roll_sales);
-        self.roll_purchases -= compensation;
-        self.roll_sales -= compensation;
-        RollCompensation(compensation)
-    }
-
-    pub fn is_nil(&self) -> bool {
-        self.roll_purchases == 0 && self.roll_sales == 0
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, Default)]
-pub struct RollUpdates(pub Map<Address, RollUpdate>);
-
-impl RollUpdates {
-    pub fn get_involved_addresses(&self) -> Set<Address> {
-        self.0.keys().copied().collect()
-    }
-
-    /// chains with another RollUpdates, compensates and returns compensations
-    pub fn chain(
-        &mut self,
-        updates: &RollUpdates,
-    ) -> Result<Map<Address, RollCompensation>, ConsensusError> {
-        let mut res = Map::default();
-        for (addr, update) in updates.0.iter() {
-            res.insert(*addr, self.apply(addr, update)?);
-            // remove if nil
-            if let hash_map::Entry::Occupied(occ) = self.0.entry(*addr) {
-                if occ.get().is_nil() {
-                    occ.remove();
-                }
-            }
-        }
-        Ok(res)
-    }
-
-    /// applies a RollUpdate, compensates and returns compensation
-    pub fn apply(
-        &mut self,
-        addr: &Address,
-        update: &RollUpdate,
-    ) -> Result<RollCompensation, ConsensusError> {
-        if update.is_nil() {
-            return Ok(RollCompensation(0));
-        }
-        match self.0.entry(*addr) {
-            hash_map::Entry::Occupied(mut occ) => occ.get_mut().chain(update),
-            hash_map::Entry::Vacant(vac) => {
-                let mut compensated_update = update.clone();
-                let compensation = compensated_update.compensate();
-                vac.insert(compensated_update);
-                Ok(compensation)
-            }
-        }
-    }
-
-    /// get the roll update for a subset of addresses
-    #[must_use]
-    pub fn clone_subset(&self, addrs: &Set<Address>) -> Self {
-        Self(
-            addrs
-                .iter()
-                .filter_map(|addr| self.0.get(addr).map(|v| (*addr, v.clone())))
-                .collect(),
-        )
-    }
-
-    /// merge another roll updates into self, overwriting existing data
-    /// addrs that are in not other are removed from self
-    pub fn sync_from(&mut self, addrs: &Set<Address>, mut other: RollUpdates) {
-        for addr in addrs.iter() {
-            if let Some(new_val) = other.0.remove(addr) {
-                self.0.insert(*addr, new_val);
-            } else {
-                self.0.remove(addr);
-            }
-        }
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, Default)]
-pub struct RollCounts(pub BTreeMap<Address, u64>);
-
-impl RollCounts {
-    pub fn new() -> Self {
-        RollCounts(BTreeMap::new())
-    }
-
-    pub fn len(&self) -> usize {
-        self.0.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
-
-    /// applies RollUpdates to self with compensations
-    pub fn apply_updates(&mut self, updates: &RollUpdates) -> Result<(), ConsensusError> {
-        for (addr, update) in updates.0.iter() {
-            match self.0.entry(*addr) {
-                btree_map::Entry::Occupied(mut occ) => {
-                    let cur_val = *occ.get();
-                    if update.roll_purchases >= update.roll_sales {
-                        *occ.get_mut() = cur_val
-                            .checked_add(update.roll_purchases - update.roll_sales)
-                            .ok_or_else(|| {
-                                ConsensusError::InvalidRollUpdate(
-                                    "overflow while incrementing roll count".into(),
-                                )
-                            })?;
-                    } else {
-                        *occ.get_mut() = cur_val
-                            .checked_sub(update.roll_sales - update.roll_purchases)
-                            .ok_or_else(|| {
-                                ConsensusError::InvalidRollUpdate(
-                                    "underflow while decrementing roll count".into(),
-                                )
-                            })?;
-                    }
-                    if *occ.get() == 0 {
-                        // remove if 0
-                        occ.remove();
-                    }
-                }
-                btree_map::Entry::Vacant(vac) => {
-                    if update.roll_purchases >= update.roll_sales {
-                        if update.roll_purchases > update.roll_sales {
-                            // ignore if 0
-                            vac.insert(update.roll_purchases - update.roll_sales);
-                        }
-                    } else {
-                        return Err(ConsensusError::InvalidRollUpdate(
-                            "underflow while decrementing roll count".into(),
-                        ));
-                    }
-                }
-            }
-        }
-        Ok(())
-    }
-
-    /// get roll counts for a subset of addresses.
-    #[must_use]
-    pub fn clone_subset(&self, addrs: &Set<Address>) -> Self {
-        Self(
-            addrs
-                .iter()
-                .filter_map(|addr| self.0.get(addr).map(|v| (*addr, *v)))
-                .collect(),
-        )
-    }
-
-    /// merge another roll counts into self, overwriting existing data
-    /// addrs that are in not other are removed from self
-    pub fn sync_from(&mut self, addrs: &Set<Address>, mut other: RollCounts) {
-        for addr in addrs.iter() {
-            if let Some(new_val) = other.0.remove(addr) {
-                self.0.insert(*addr, new_val);
-            } else {
-                self.0.remove(addr);
-            }
-        }
-    }
-}
-
-/// Roll specific method on operation
-pub trait OperationRollInterface {
-    /// get roll related modifications
-    fn get_roll_updates(&self) -> Result<RollUpdates, ConsensusError>;
-}
-
-impl OperationRollInterface for Operation {
-    fn get_roll_updates(&self) -> Result<RollUpdates, ConsensusError> {
-        let mut res = RollUpdates::default();
-        match self.content.op {
-            OperationType::Transaction { .. } => {}
-            OperationType::RollBuy { roll_count } => {
-                res.apply(
-                    &Address::from_public_key(&self.content.sender_public_key),
-                    &RollUpdate {
-                        roll_purchases: roll_count,
-                        roll_sales: 0,
-                    },
-                )?;
-            }
-            OperationType::RollSell { roll_count } => {
-                res.apply(
-                    &Address::from_public_key(&self.content.sender_public_key),
-                    &RollUpdate {
-                        roll_purchases: 0,
-                        roll_sales: roll_count,
-                    },
-                )?;
-            }
-            OperationType::ExecuteSC { .. } => {}
-        }
-        Ok(res)
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct ThreadCycleState {
-    /// Cycle number
-    pub cycle: u64,
-    /// Last final slot (can be a miss)
-    pub last_final_slot: Slot,
-    /// Number of rolls an address has
-    pub roll_count: RollCounts,
-    /// Cycle roll updates
-    pub cycle_updates: RollUpdates,
-    /// Used to seed the random selector at each cycle
-    pub rng_seed: BitVec<Lsb0, u8>,
-    /// Per-address production statistics (ok_count, nok_count)
-    pub production_stats: Map<Address, (u64, u64)>,
-}
-
-impl ThreadCycleState {
-    /// returns true if all slots of this cycle for this thread are final
-    fn is_complete(&self, periods_per_cycle: u64) -> bool {
-        self.last_final_slot.period == (self.cycle + 1) * periods_per_cycle - 1
-    }
-}
-
+use crate::{error::POSResult, error::ProofOfStakeError, roll_counts::RollCounts, settings::ProofOfStakeConfig, RollUpdates, thread_cycle_state::ThreadCycleState, POSBlock, export_pos::ExportProofOfStake};
 type DrawCache = HashMap<u64, (usize, HashMap<Slot, (Address, Vec<Address>)>)>;
 
 pub struct ProofOfStake {
     /// Config
-    cfg: ConsensusConfig,
+    cfg: ProofOfStakeConfig,
     /// Index by thread and cycle number
-    cycle_states: Vec<VecDeque<ThreadCycleState>>,
+    pub(crate) cycle_states: Vec<VecDeque<ThreadCycleState>>,
     /// Cycle draw cache: cycle_number => (counter, map(slot => (block_creator_addr, vec<endorsement_creator_addr>)))
     draw_cache: DrawCache,
     draw_cache_counter: usize,
@@ -346,240 +30,12 @@ pub struct ProofOfStake {
     watched_addresses: Set<Address>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ExportProofOfStake {
-    /// Index by thread and cycle number
-    pub cycle_states: Vec<VecDeque<ThreadCycleState>>,
-}
-
-impl SerializeCompact for ExportProofOfStake {
-    fn to_bytes_compact(&self) -> Result<Vec<u8>, ModelsError> {
-        let mut res: Vec<u8> = Vec::new();
-        for thread_lst in self.cycle_states.iter() {
-            let cycle_count: u32 = thread_lst.len().try_into().map_err(|err| {
-                ModelsError::SerializeError(format!(
-                    "too many cycles when serializing ExportProofOfStake: {}",
-                    err
-                ))
-            })?;
-            res.extend(cycle_count.to_varint_bytes());
-            for itm in thread_lst.iter() {
-                res.extend(itm.to_bytes_compact()?);
-            }
-        }
-        Ok(res)
-    }
-}
-
-impl DeserializeCompact for ExportProofOfStake {
-    fn from_bytes_compact(buffer: &[u8]) -> Result<(Self, usize), ModelsError> {
-        let (thread_count, max_cycles) = with_serialization_context(|context| {
-            (context.parent_count, context.max_bootstrap_pos_cycles)
-        });
-        let mut cursor = 0usize;
-
-        let mut cycle_states = Vec::with_capacity(thread_count as usize);
-        for thread in 0..thread_count {
-            let (n_cycles, delta) = u32::from_varint_bytes(&buffer[cursor..])?;
-            cursor += delta;
-            if n_cycles == 0 || n_cycles > max_cycles {
-                return Err(ModelsError::SerializeError(
-                    "number of cycles invalid when deserializing ExportProofOfStake".into(),
-                ));
-            }
-            cycle_states.push(VecDeque::with_capacity(n_cycles as usize));
-            for _ in 0..n_cycles {
-                let (thread_cycle_state, delta) =
-                    ThreadCycleState::from_bytes_compact(&buffer[cursor..])?;
-                cursor += delta;
-                cycle_states[thread as usize].push_back(thread_cycle_state);
-            }
-        }
-        Ok((ExportProofOfStake { cycle_states }, cursor))
-    }
-}
-
-impl SerializeCompact for ThreadCycleState {
-    fn to_bytes_compact(&self) -> Result<Vec<u8>, ModelsError> {
-        let mut res: Vec<u8> = Vec::new();
-
-        // cycle
-        res.extend(self.cycle.to_varint_bytes());
-
-        // last final slot
-        res.extend(self.last_final_slot.to_bytes_compact()?);
-
-        // roll count
-        let n_entries: u32 = self.roll_count.0.len().try_into().map_err(|err| {
-            ModelsError::SerializeError(format!(
-                "too many entries when serializing ExportThreadCycleState roll_count: {}",
-                err
-            ))
-        })?;
-        res.extend(n_entries.to_varint_bytes());
-        for (addr, n_rolls) in self.roll_count.0.iter() {
-            res.extend(addr.to_bytes());
-            res.extend(n_rolls.to_varint_bytes());
-        }
-
-        // cycle updates
-        let n_entries: u32 = self.cycle_updates.0.len().try_into().map_err(|err| {
-            ModelsError::SerializeError(format!(
-                "too many entries when serializing ExportThreadCycleState cycle_updates: {}",
-                err
-            ))
-        })?;
-        res.extend(n_entries.to_varint_bytes());
-        for (addr, updates) in self.cycle_updates.0.iter() {
-            res.extend(addr.to_bytes());
-            res.extend(updates.to_bytes_compact()?);
-        }
-
-        // rng seed
-        let n_entries: u32 = self.rng_seed.len().try_into().map_err(|err| {
-            ModelsError::SerializeError(format!(
-                "too many entries when serializing ExportThreadCycleState rng_seed: {}",
-                err
-            ))
-        })?;
-        res.extend(n_entries.to_varint_bytes());
-        res.extend(self.rng_seed.clone().into_vec());
-
-        // production stats
-        let n_entries: u32 = self.production_stats.len().try_into().map_err(|err| {
-            ModelsError::SerializeError(format!(
-                "too many entries when serializing ExportThreadCycleState production_stats: {}",
-                err
-            ))
-        })?;
-        res.extend(n_entries.to_varint_bytes());
-        for (addr, (ok_count, nok_count)) in self.production_stats.iter() {
-            res.extend(addr.to_bytes());
-            res.extend(ok_count.to_varint_bytes());
-            res.extend(nok_count.to_varint_bytes());
-        }
-
-        Ok(res)
-    }
-}
-
-impl DeserializeCompact for ThreadCycleState {
-    fn from_bytes_compact(buffer: &[u8]) -> Result<(Self, usize), ModelsError> {
-        let max_entries = with_serialization_context(|context| (context.max_bootstrap_pos_entries));
-        let mut cursor = 0usize;
-
-        // cycle
-        let (cycle, delta) = u64::from_varint_bytes(&buffer[cursor..])?;
-        cursor += delta;
-
-        // last final slot
-        let (last_final_slot, delta) = Slot::from_bytes_compact(&buffer[cursor..])?;
-        cursor += delta;
-
-        // roll count
-        let (n_entries, delta) = u32::from_varint_bytes(&buffer[cursor..])?;
-        cursor += delta;
-        if n_entries > max_entries {
-            return Err(ModelsError::SerializeError(
-                "invalid number entries when deserializing ExportThreadCycleStat roll_count".into(),
-            ));
-        }
-        let mut roll_count = RollCounts::default();
-        for _ in 0..n_entries {
-            let addr = Address::from_bytes(&array_from_slice(&buffer[cursor..])?)?;
-            cursor += ADDRESS_SIZE_BYTES;
-            let (rolls, delta) = u64::from_varint_bytes(&buffer[cursor..])?;
-            cursor += delta;
-            roll_count.0.insert(addr, rolls);
-        }
-
-        // cycle updates
-        let (n_entries, delta) = u32::from_varint_bytes(&buffer[cursor..])?;
-        cursor += delta;
-        if n_entries > max_entries {
-            return Err(ModelsError::SerializeError(
-                "invalid number entries when deserializing ExportThreadCycleStat cycle_updates"
-                    .into(),
-            ));
-        }
-        let mut cycle_updates = RollUpdates(Map::with_capacity_and_hasher(
-            n_entries as usize,
-            BuildMap::default(),
-        ));
-        for _ in 0..n_entries {
-            let addr = Address::from_bytes(&array_from_slice(&buffer[cursor..])?)?;
-            cursor += ADDRESS_SIZE_BYTES;
-            let (update, delta) = RollUpdate::from_bytes_compact(&buffer[cursor..])?;
-            cursor += delta;
-            cycle_updates.0.insert(addr, update);
-        }
-
-        // rng seed
-        let (n_entries, delta) = u32::from_varint_bytes(&buffer[cursor..])?;
-        cursor += delta;
-        if n_entries > max_entries {
-            return Err(ModelsError::SerializeError(
-                "invalid number entries when deserializing ExportThreadCycleStat rng_seed".into(),
-            ));
-        }
-        let bits_u8_len = n_entries.div_ceil(u8::BITS) as usize;
-        if buffer[cursor..].len() < bits_u8_len {
-            return Err(ModelsError::SerializeError(
-                "too few remaining bytes when deserializing ExportThreadCycleStat rng_seed".into(),
-            ));
-        }
-        let mut rng_seed: BitVec<Lsb0, u8> = BitVec::try_from_vec(buffer[cursor..(cursor+bits_u8_len)].to_vec())
-            .map_err(|_| ModelsError::SerializeError("error in bitvec conversion during deserialization of ExportThreadCycleStat rng_seed".into()))?;
-        rng_seed.truncate(n_entries as usize);
-        if rng_seed.len() != n_entries as usize {
-            return Err(ModelsError::SerializeError(
-                "incorrect resulting size when deserializing ExportThreadCycleStat rng_seed".into(),
-            ));
-        }
-        cursor += rng_seed.elements();
-
-        // production stats
-        let (n_entries, delta) = u32::from_varint_bytes(&buffer[cursor..])?;
-        cursor += delta;
-        if n_entries > max_entries {
-            return Err(ModelsError::SerializeError(
-                "invalid number entries when deserializing ExportThreadCycleStat production_stats"
-                    .into(),
-            ));
-        }
-        let mut production_stats =
-            Map::with_capacity_and_hasher(n_entries as usize, BuildMap::default());
-        for _ in 0..n_entries {
-            let addr = Address::from_bytes(&array_from_slice(&buffer[cursor..])?)?;
-            cursor += ADDRESS_SIZE_BYTES;
-            let (ok_count, delta) = u64::from_varint_bytes(&buffer[cursor..])?;
-            cursor += delta;
-            let (nok_count, delta) = u64::from_varint_bytes(&buffer[cursor..])?;
-            cursor += delta;
-            production_stats.insert(addr, (ok_count, nok_count));
-        }
-
-        // return struct
-        Ok((
-            ThreadCycleState {
-                cycle,
-                last_final_slot,
-                roll_count,
-                cycle_updates,
-                rng_seed,
-                production_stats,
-            },
-            cursor,
-        ))
-    }
-}
-
 impl ProofOfStake {
     pub async fn new(
-        cfg: ConsensusConfig,
+        cfg: ProofOfStakeConfig,
         genesis_block_ids: &[BlockId],
         boot_pos: Option<ExportProofOfStake>,
-    ) -> Result<ProofOfStake, ConsensusError> {
+    ) -> POSResult<ProofOfStake> {
         let initial_seeds = ProofOfStake::generate_initial_seeds(&cfg);
         let draw_cache = HashMap::with_capacity(cfg.pos_draw_cached_cycles);
         let draw_cache_counter: usize = 0;
@@ -642,7 +98,7 @@ impl ProofOfStake {
     }
 
     /// active stakers count
-    pub fn get_stakers_count(&self, target_cycle: u64) -> Result<u64, ConsensusError> {
+    pub fn get_stakers_count(&self, target_cycle: u64) -> POSResult<u64> {
         let mut res: u64 = 0;
         for thread in 0..self.cfg.thread_count {
             res += self.get_lookback_roll_count(target_cycle, thread)?.0.len() as u64;
@@ -650,7 +106,7 @@ impl ProofOfStake {
         Ok(res)
     }
 
-    async fn get_initial_rolls(cfg: &ConsensusConfig) -> Result<Vec<RollCounts>, ConsensusError> {
+    async fn get_initial_rolls(cfg: &ProofOfStakeConfig) -> POSResult<Vec<RollCounts>> {
         let mut res = vec![BTreeMap::<Address, u64>::new(); cfg.thread_count as usize];
         let addrs_map = serde_json::from_str::<Map<Address, u64>>(
             &tokio::fs::read_to_string(&cfg.initial_rolls_path).await?,
@@ -661,7 +117,7 @@ impl ProofOfStake {
         Ok(res.into_iter().map(RollCounts).collect())
     }
 
-    fn generate_initial_seeds(cfg: &ConsensusConfig) -> Vec<Vec<u8>> {
+    fn generate_initial_seeds(cfg: &ProofOfStakeConfig) -> Vec<Vec<u8>> {
         let mut cur_seed = cfg.initial_draw_seed.as_bytes().to_vec();
         let mut initial_seeds = Vec::with_capacity((cfg.pos_lookback_cycles + 1) as usize);
         for _ in 0..(cfg.pos_lookback_cycles + 1) {
@@ -669,12 +125,6 @@ impl ProofOfStake {
             initial_seeds.push(cur_seed.clone());
         }
         initial_seeds
-    }
-
-    pub fn export(&self) -> ExportProofOfStake {
-        ExportProofOfStake {
-            cycle_states: self.cycle_states.clone(),
-        }
     }
 
     pub fn get_next_selected_slot(&mut self, from_slot: Slot, address: Address) -> Option<Slot> {
@@ -698,7 +148,7 @@ impl ProofOfStake {
     fn get_cycle_draws(
         &mut self,
         cycle: u64,
-    ) -> Result<&HashMap<Slot, (Address, Vec<Address>)>, ConsensusError> {
+    ) -> POSResult<&HashMap<Slot, (Address, Vec<Address>)>> {
         self.draw_cache_counter += 1;
 
         // check if cycle is already in cache
@@ -738,14 +188,14 @@ impl ProofOfStake {
                 let final_data = self
                     .get_final_roll_data(target_cycle, scan_thread)
                     .ok_or_else(|| {
-                        ConsensusError::PosCycleUnavailable(format!(
+                        ProofOfStakeError::PosCycleUnavailable(format!(
                     "trying to get PoS draw rolls/seed for cycle {} thread {} which is unavailable",
                     target_cycle, scan_thread
                 ))
                     })?;
                 if !final_data.is_complete(self.cfg.periods_per_cycle) {
                     // the target cycle is not final yet
-                    return Err(ConsensusError::PosCycleUnavailable(format!("tryign to get PoS draw rolls/seed for cycle {} thread {} which is not finalized yet", target_cycle, scan_thread)));
+                    return Err(ProofOfStakeError::PosCycleUnavailable(format!("tryign to get PoS draw rolls/seed for cycle {} thread {} which is not finalized yet", target_cycle, scan_thread)));
                 }
                 rng_seed_bits.extend(&final_data.rng_seed);
                 for (addr, &n_rolls) in final_data.roll_count.0.iter() {
@@ -770,7 +220,7 @@ impl ProofOfStake {
             let mut cum_sum_cursor = 0u64;
             for scan_thread in 0..self.cfg.thread_count {
                 let init_rolls = &self.initial_rolls.as_ref().ok_or_else( ||
-                    ConsensusError::PosCycleUnavailable(format!(
+                    ProofOfStakeError::PosCycleUnavailable(format!(
                     "trying to get PoS initial draw rolls/seed for negative cycle at thread {}, which is unavailable",
                     scan_thread
                 )))?[scan_thread as usize];
@@ -791,12 +241,12 @@ impl ProofOfStake {
         };
         let cum_sum_max = cum_sum
             .last()
-            .ok_or_else(|| ConsensusError::ContainerInconsistency("draw cum_sum is empty".into()))?
+            .ok_or_else(|| ProofOfStakeError::ContainerInconsistency("draw cum_sum is empty".into()))?
             .0;
 
         // init RNG
         let mut rng = Xoshiro256PlusPlus::from_seed(rng_seed.try_into().map_err(|_| {
-            ConsensusError::ContainerInconsistency("could not seed RNG with computed seed".into())
+            ProofOfStakeError::ContainerInconsistency("could not seed RNG with computed seed".into())
         })?);
 
         // perform draws
@@ -857,22 +307,22 @@ impl ProofOfStake {
     pub fn draw_endorsement_producers(
         &mut self,
         slot: Slot,
-    ) -> Result<Vec<Address>, ConsensusError> {
+    ) -> POSResult<Vec<Address>> {
         Ok(self.draw(slot)?.1)
     }
 
-    pub fn draw_block_producer(&mut self, slot: Slot) -> Result<Address, ConsensusError> {
+    pub fn draw_block_producer(&mut self, slot: Slot) -> POSResult<Address> {
         Ok(self.draw(slot)?.0)
     }
 
     /// returns (block producers, vec<endorsement producers>)
-    fn draw(&mut self, slot: Slot) -> Result<(Address, Vec<Address>), ConsensusError> {
+    fn draw(&mut self, slot: Slot) -> POSResult<(Address, Vec<Address>)> {
         let cycle = slot.get_cycle(self.cfg.periods_per_cycle);
         let cycle_draws = self.get_cycle_draws(cycle)?;
         Ok(cycle_draws
             .get(&slot)
             .ok_or_else(|| {
-                ConsensusError::ContainerInconsistency(format!(
+                ProofOfStakeError::ContainerInconsistency(format!(
                     "draw cycle computed for cycle {} but slot {} absent",
                     cycle, slot
                 ))
@@ -884,8 +334,8 @@ impl ProofOfStake {
     /// see /consensus/pos.md#when-a-block-b-in-thread-tau-and-cycle-n-becomes-final
     pub fn note_final_blocks(
         &mut self,
-        blocks: Map<BlockId, &ActiveBlock>,
-    ) -> Result<(), ConsensusError> {
+        blocks: Map<BlockId, POSBlock>,
+    ) -> POSResult<()> {
         // Update internal states after a set of blocks become final.
 
         // process blocks by increasing slot number
@@ -1074,16 +524,16 @@ impl ProofOfStake {
         &self,
         cycle: u64,
         thread: u8,
-    ) -> Result<Map<Address, Amount>, ConsensusError> {
+    ) -> POSResult<Map<Address, Amount>> {
         let mut res = Map::default();
         if let Some(target_cycle) =
             cycle.checked_sub(self.cfg.pos_lookback_cycles + self.cfg.pos_lock_cycles + 1)
         {
             let roll_data = self
                 .get_final_roll_data(target_cycle, thread)
-                .ok_or(ConsensusError::NotFinalRollError)?;
+                .ok_or(ProofOfStakeError::NotFinalRollError)?;
             if !roll_data.is_complete(self.cfg.periods_per_cycle) {
-                return Err(ConsensusError::NotFinalRollError); // target_cycle not completely final
+                return Err(ProofOfStakeError::NotFinalRollError); // target_cycle not completely final
             }
             for (addr, update) in roll_data.cycle_updates.0.iter() {
                 let sale_delta = update.roll_sales.saturating_sub(update.roll_purchases);
@@ -1093,7 +543,7 @@ impl ProofOfStake {
                         self.cfg
                             .roll_price
                             .checked_mul_u64(sale_delta)
-                            .ok_or(ConsensusError::RollOverflowError)?,
+                            .ok_or(ProofOfStakeError::RollOverflowError)?,
                     );
                 }
             }
@@ -1106,7 +556,7 @@ impl ProofOfStake {
         &self,
         cycle: u64,
         address_thread: u8,
-    ) -> Result<Set<Address>, ConsensusError> {
+    ) -> POSResult<Set<Address>> {
         // compute target cycle
         if cycle <= self.cfg.pos_lookback_cycles {
             // no lookback cycles yet: do not deactivate anyone
@@ -1120,9 +570,9 @@ impl ProofOfStake {
             // get roll data
             let roll_data = self
                 .get_final_roll_data(target_cycle, thread)
-                .ok_or(ConsensusError::NotFinalRollError)?;
+                .ok_or(ProofOfStakeError::NotFinalRollError)?;
             if !roll_data.is_complete(self.cfg.periods_per_cycle) {
-                return Err(ConsensusError::NotFinalRollError); // target_cycle not completely final
+                return Err(ProofOfStakeError::NotFinalRollError); // target_cycle not completely final
             }
             // accumulate counters
             for (addr, (n_ok, n_nok)) in roll_data.production_stats.iter() {
@@ -1201,26 +651,26 @@ impl ProofOfStake {
         &self,
         source_cycle: u64,
         thread: u8,
-    ) -> Result<&RollCounts, ConsensusError> {
+    ) -> POSResult<&RollCounts> {
         if source_cycle > self.cfg.pos_lookback_cycles {
             // nominal case: lookback after or at cycle 0
             let target_cycle = source_cycle - self.cfg.pos_lookback_cycles - 1;
             if let Some(state) = self.get_final_roll_data(target_cycle, thread) {
                 if !state.is_complete(self.cfg.periods_per_cycle) {
-                    return Err(ConsensusError::PosCycleUnavailable(
+                    return Err(ProofOfStakeError::PosCycleUnavailable(
                         "target cycle incomplete".to_string(),
                     ));
                 }
                 Ok(&state.roll_count)
             } else {
-                Err(ConsensusError::PosCycleUnavailable(
+                Err(ProofOfStakeError::PosCycleUnavailable(
                     "target cycle unavailable".to_string(),
                 ))
             }
         } else if let Some(init) = &self.initial_rolls {
             Ok(&init[thread as usize])
         } else {
-            Err(ConsensusError::PosCycleUnavailable(
+            Err(ProofOfStakeError::PosCycleUnavailable(
                 "negative cycle unavailable".to_string(),
             ))
         }

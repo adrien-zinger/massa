@@ -2,8 +2,8 @@
 
 use crate::{
     tests::tools::{self, create_transaction, generate_ledger_file, get_export_active_test_block},
-    BootstrapableGraph, LedgerSubset,
 };
+use massa_graph::{BootstrapableGraph, ledger::LedgerSubset};
 use massa_models::clique::Clique;
 use massa_models::ledger::LedgerData;
 use massa_models::{Address, Amount, BlockId, Operation, Slot};

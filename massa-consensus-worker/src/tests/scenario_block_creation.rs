@@ -1,7 +1,6 @@
 // Copyright (c) 2021 MASSA LABS <info@massa.net>
 
 use crate::{
-    pos::{RollCounts, RollUpdate, RollUpdates},
     tests::tools::{
         self, create_endorsement, create_roll_transaction, create_transaction, generate_ledger_file,
     },
@@ -11,6 +10,7 @@ use massa_models::{ledger::LedgerData, EndorsementId, OperationType};
 use massa_models::{Address, Amount, Block, BlockHeader, BlockHeaderContent, Slot};
 use massa_models::{Endorsement, SerializeCompact};
 use massa_pool::PoolCommand;
+use massa_proof_of_stake_exports::{RollCounts, RollUpdate, RollUpdates};
 use massa_protocol_exports::ProtocolCommand;
 use massa_signature::{derive_public_key, generate_random_private_key, PrivateKey};
 use massa_time::MassaTime;

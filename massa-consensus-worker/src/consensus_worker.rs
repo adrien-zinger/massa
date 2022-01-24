@@ -1,24 +1,20 @@
 // Copyright (c) 2021 MASSA LABS <info@massa.net>
-
-use super::{block_graph::*, pos::ProofOfStake, settings::ConsensusConfig};
-use crate::error::ConsensusError;
-use crate::pos::ExportProofOfStake;
-use crate::settings;
+use massa_consensus_exports::{error::{ConsensusError, ConsensusResult as Result}, commands::{ConsensusManagementCommand, ConsensusCommand}, events::ConsensusEvent, ConsensusConfig, settings};
+use massa_graph::{BlockGraph, BlockGraphExport};
+use massa_proof_of_stake_exports::{ProofOfStake, error::ProofOfStakeError, POSBlock, ExportProofOfStake};
 use massa_execution::{ExecutionCommandSender, ExecutionEventReceiver};
 use massa_hash::hash::Hash;
 use massa_models::address::AddressState;
-use massa_models::api::{EndorsementInfo, LedgerInfo, RollsInfo};
+use massa_models::api::{LedgerInfo, RollsInfo};
 use massa_models::ledger::LedgerData;
 use massa_models::prehash::{BuildMap, Map, Set};
 use massa_models::{address::AddressCycleProductionStats, stats::ConsensusStats, OperationId};
 use massa_models::{
-    clique::Clique,
     timeslots::{get_block_slot_timestamp, get_latest_block_slot_at_timestamp},
 };
 use massa_models::{
     Address, Block, BlockHeader, BlockHeaderContent, BlockId, Endorsement, EndorsementContent,
     EndorsementId, Operation, OperationSearchResult, OperationType, SerializeCompact, Slot,
-    StakersCycleProductionStats,
 };
 use massa_pool::PoolCommandSender;
 use massa_protocol_exports::{ProtocolCommandSender, ProtocolEvent, ProtocolEventReceiver};
@@ -26,87 +22,10 @@ use massa_signature::{derive_public_key, PrivateKey, PublicKey};
 use massa_time::MassaTime;
 use std::{cmp::max, collections::HashSet, collections::VecDeque};
 use tokio::{
-    sync::{mpsc, mpsc::error::SendTimeoutError, oneshot},
+    sync::{mpsc, mpsc::error::SendTimeoutError},
     time::{sleep, sleep_until, Sleep},
 };
 use tracing::{debug, info, warn};
-
-type SelectionDraws = Vec<(Slot, (Address, Vec<Address>))>;
-
-/// Commands that can be proccessed by consensus.
-#[derive(Debug)]
-pub enum ConsensusCommand {
-    /// Returns through a channel current blockgraph without block operations.
-    GetBlockGraphStatus {
-        slot_start: Option<Slot>,
-        slot_end: Option<Slot>,
-        response_tx: oneshot::Sender<BlockGraphExport>,
-    },
-    /// Returns through a channel full block with specified hash.
-    GetActiveBlock {
-        block_id: BlockId,
-        response_tx: oneshot::Sender<Option<Block>>,
-    },
-    /// Returns through a channel full block and status with specified hash.
-    GetBlockStatus {
-        block_id: BlockId,
-        response_tx: oneshot::Sender<Option<ExportBlockStatus>>,
-    },
-    /// Returns through a channel the list of slots with the address of the selected staker.
-    GetSelectionDraws {
-        start: Slot,
-        end: Slot,
-        response_tx: oneshot::Sender<Result<SelectionDraws, ConsensusError>>,
-    },
-    /// Returns the bootstrap state
-    GetBootstrapState(oneshot::Sender<(ExportProofOfStake, BootstrapableGraph)>),
-    /// Returns info for a set of addresses (rolls and balance)
-    GetAddressesInfo {
-        addresses: Set<Address>,
-        response_tx: oneshot::Sender<Map<Address, AddressState>>,
-    },
-    GetRecentOperations {
-        address: Address,
-        response_tx: oneshot::Sender<Map<OperationId, OperationSearchResult>>,
-    },
-    GetOperations {
-        operation_ids: Set<OperationId>,
-        response_tx: oneshot::Sender<Map<OperationId, OperationSearchResult>>,
-    },
-    GetStats(oneshot::Sender<ConsensusStats>),
-    GetActiveStakers(oneshot::Sender<Map<Address, u64>>),
-    RegisterStakingPrivateKeys(Vec<PrivateKey>),
-    RemoveStakingAddresses(Set<Address>),
-    GetStakingAddressses(oneshot::Sender<Set<Address>>),
-    GetStakersProductionStats {
-        addrs: Set<Address>,
-        response_tx: oneshot::Sender<Vec<StakersCycleProductionStats>>,
-    },
-    GetBlockIdsByCreator {
-        address: Address,
-        response_tx: oneshot::Sender<Map<BlockId, Status>>,
-    },
-    GetEndorsementsByAddress {
-        address: Address,
-        response_tx: oneshot::Sender<Map<EndorsementId, Endorsement>>,
-    },
-    GetEndorsementsById {
-        endorsements: Set<EndorsementId>,
-        response_tx: oneshot::Sender<Map<EndorsementId, EndorsementInfo>>,
-    },
-
-    GetCliques(oneshot::Sender<Vec<Clique>>),
-}
-
-/// Events that are emitted by consensus.
-#[derive(Debug, Clone)]
-pub enum ConsensusEvent {
-    NeedSync, // probable desync detected, need resync
-}
-
-/// Events that are emitted by consensus.
-#[derive(Debug, Clone)]
-pub enum ConsensusManagementCommand {}
 
 /// Manages consensus.
 pub struct ConsensusWorker {
@@ -181,7 +100,7 @@ impl ConsensusWorker {
         controller_manager_rx: mpsc::Receiver<ConsensusManagementCommand>,
         clock_compensation: i64,
         staking_keys: Map<Address, (PublicKey, PrivateKey)>,
-    ) -> Result<ConsensusWorker, ConsensusError> {
+    ) -> Result<ConsensusWorker> {
         let now = MassaTime::compensated_now(clock_compensation)?;
         let previous_slot = get_latest_block_slot_at_timestamp(
             cfg.thread_count,
@@ -294,7 +213,7 @@ impl ConsensusWorker {
     /// It's mostly a tokio::select within a loop.
     pub async fn run_loop(
         mut self,
-    ) -> Result<(ProtocolEventReceiver, ExecutionEventReceiver), ConsensusError> {
+    ) -> Result<(ProtocolEventReceiver, ExecutionEventReceiver)> {
         // signal initial state to pool
         if let Some(previous_slot) = self.previous_slot {
             self.pool_command_sender
@@ -388,7 +307,7 @@ impl ConsensusWorker {
     async fn slot_tick(
         &mut self,
         next_slot_timer: &mut std::pin::Pin<&mut Sleep>,
-    ) -> Result<(), ConsensusError> {
+    ) -> Result<()> {
         let now = MassaTime::compensated_now(self.clock_compensation)?;
         let observed_slot = get_latest_block_slot_at_timestamp(
             self.cfg.thread_count,
@@ -454,7 +373,7 @@ impl ConsensusWorker {
             while cur_slot <= observed_slot {
                 let block_draw = match self.pos.draw_block_producer(cur_slot) {
                     Ok(b_draw) => Some(b_draw),
-                    Err(ConsensusError::PosCycleUnavailable(_)) => {
+                    Err(ProofOfStakeError::PosCycleUnavailable(_)) => {
                         massa_trace!(
                             "consensus.consensus_worker.slot_tick.block_creatorunavailable",
                             {}
@@ -463,7 +382,7 @@ impl ConsensusWorker {
                         let _ = self.send_consensus_event(ConsensusEvent::NeedSync).await;
                         None
                     }
-                    Err(err) => return Err(err),
+                    Err(err) => return Err(err.into()),
                 };
                 if let Some(addr) = block_draw {
                     if let Some((pub_k, priv_k)) = self.staking_keys.get(&addr).cloned() {
@@ -531,7 +450,7 @@ impl ConsensusWorker {
         creator_addr: &Address,
         creator_public_key: &PublicKey,
         creator_private_key: &PrivateKey,
-    ) -> Result<(), ConsensusError> {
+    ) -> Result<()> {
         // get parents
         let parents = self.block_db.get_best_parents();
         let (thread_parent, thread_parent_period) = parents[cur_slot.thread as usize];
@@ -726,7 +645,7 @@ impl ConsensusWorker {
         Ok(())
     }
 
-    async fn send_consensus_event(&self, event: ConsensusEvent) -> Result<(), ConsensusError> {
+    async fn send_consensus_event(&self, event: ConsensusEvent) -> Result<()> {
         let result = self
             .controller_event_tx
             .send_timeout(event, self.cfg.max_send_wait.to_duration())
@@ -753,7 +672,7 @@ impl ConsensusWorker {
     async fn process_consensus_command(
         &mut self,
         cmd: ConsensusCommand,
-    ) -> Result<(), ConsensusError> {
+    ) -> Result<()> {
         match cmd {
             ConsensusCommand::GetBlockGraphStatus {
                 slot_start,
@@ -850,11 +769,11 @@ impl ConsensusWorker {
                         } else {
                             (
                                 match self.pos.draw_block_producer(cur_slot) {
-                                    Err(err) => break Err(err),
+                                    Err(err) => break Err(ConsensusError::from(err)),
                                     Ok(block_addr) => block_addr,
                                 },
                                 match self.pos.draw_endorsement_producers(cur_slot) {
-                                    Err(err) => break Err(err),
+                                    Err(err) => break Err(err.into()),
                                     Ok(endo_addrs) => endo_addrs,
                                 },
                             )
@@ -877,7 +796,7 @@ impl ConsensusWorker {
                     "consensus.consensus_worker.process_consensus_command.get_bootstrap_state",
                     {}
                 );
-                let resp = (self.pos.export(), self.block_db.export_bootstrap_graph()?);
+                let resp = (ExportProofOfStake::from(&self.pos), self.block_db.export_bootstrap_graph()?);
                 if response_tx.send(resp).is_err() {
                     warn!("consensus: could not send GetBootstrapState answer");
                 }
@@ -1055,7 +974,7 @@ impl ConsensusWorker {
         }
     }
 
-    fn get_stats(&mut self) -> Result<ConsensusStats, ConsensusError> {
+    fn get_stats(&mut self) -> Result<ConsensusStats> {
         let timespan_end = max(
             self.launch_time,
             MassaTime::compensated_now(self.clock_compensation)?,
@@ -1100,7 +1019,7 @@ impl ConsensusWorker {
                 Ok(rolls) => {
                     res.extend(&rolls.0);
                 }
-                Err(err) => return Err(err),
+                Err(err) => return Err(err.into()),
             }
         }
         Ok(res)
@@ -1109,7 +1028,7 @@ impl ConsensusWorker {
     fn get_addresses_info(
         &self,
         addresses: &Set<Address>,
-    ) -> Result<Map<Address, AddressState>, ConsensusError> {
+    ) -> Result<Map<Address, AddressState>> {
         let thread_count = self.cfg.thread_count;
         let mut addresses_by_thread = vec![Set::<Address>::default(); thread_count as usize];
         for addr in addresses.iter() {
@@ -1126,14 +1045,14 @@ impl ConsensusWorker {
 
             let lookback_data = match self.pos.get_lookback_roll_count(cur_cycle, thread) {
                 Ok(rolls) => Some(rolls),
-                Err(ConsensusError::PosCycleUnavailable(_)) => None,
-                Err(e) => return Err(e),
+                Err(ProofOfStakeError::PosCycleUnavailable(_)) => None,
+                Err(e) => return Err(e.into()),
             };
             let final_data = self
                 .pos
                 .get_final_roll_data(self.pos.get_last_final_block_cycle(thread), thread)
                 .ok_or_else(|| {
-                    ConsensusError::PosCycleUnavailable("final cycle unavailable".to_string())
+                    ProofOfStakeError::PosCycleUnavailable("final cycle unavailable".to_string())
                 })?;
             let candidate_data = self.block_db.get_roll_data_at_parent(
                 self.block_db.get_best_parents()[thread as usize].0,
@@ -1162,7 +1081,7 @@ impl ConsensusWorker {
                                 .cfg
                                 .roll_price
                                 .checked_mul_u64(*locked_rolls.get(addr).unwrap_or(&0))
-                                .ok_or(ConsensusError::RollOverflowError)?,
+                                .ok_or(ProofOfStakeError::RollOverflowError)?,
                             candidate_ledger_info: ledger_data
                                 .candidate_data
                                 .0
@@ -1202,7 +1121,7 @@ impl ConsensusWorker {
     ///
     /// # Arguments
     /// * event: event type to process.
-    async fn process_protocol_event(&mut self, event: ProtocolEvent) -> Result<(), ConsensusError> {
+    async fn process_protocol_event(&mut self, event: ProtocolEvent) -> Result<()> {
         match event {
             ProtocolEvent::ReceivedBlock {
                 block_id,
@@ -1263,7 +1182,7 @@ impl ConsensusWorker {
     }
 
     // prune statistics
-    fn prune_stats(&mut self) -> Result<(), ConsensusError> {
+    fn prune_stats(&mut self) -> Result<()> {
         let start_time = MassaTime::compensated_now(self.clock_compensation)?
             .saturating_sub(self.stats_history_timespan);
         self.final_block_stats.retain(|(t, _, _)| t >= &start_time);
@@ -1271,7 +1190,7 @@ impl ConsensusWorker {
         Ok(())
     }
 
-    async fn block_db_changed(&mut self) -> Result<(), ConsensusError> {
+    async fn block_db_changed(&mut self) -> Result<()> {
         massa_trace!("consensus.consensus_worker.block_db_changed", {});
 
         // Propagate new blocks
@@ -1337,7 +1256,7 @@ impl ConsensusWorker {
                     }),
                 );
                 // List final block
-                new_final_blocks.insert(b_id, a_block);
+                new_final_blocks.insert(b_id, POSBlock::from(a_block));
                 // add to stats
                 self.final_block_stats.push_back((
                     timestamp,
@@ -1472,7 +1391,7 @@ pub fn create_endorsement(
     private_key: &PrivateKey,
     index: u32,
     endorsed_block: BlockId,
-) -> Result<(EndorsementId, Endorsement), ConsensusError> {
+) -> Result<(EndorsementId, Endorsement)> {
     let content = EndorsementContent {
         sender_public_key,
         slot,

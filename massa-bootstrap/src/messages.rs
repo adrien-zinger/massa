@@ -1,6 +1,7 @@
 // Copyright (c) 2021 MASSA LABS <info@massa.net>
 
-use massa_consensus::{BootstrapableGraph, ExportProofOfStake};
+use massa_graph::BootstrapableGraph;
+use massa_proof_of_stake_exports::ExportProofOfStake;
 use massa_execution::BootstrapExecutionState;
 use massa_models::{
     DeserializeCompact, DeserializeVarInt, ModelsError, SerializeCompact, SerializeVarInt, Version,
