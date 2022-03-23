@@ -119,6 +119,7 @@ impl Endpoints for API<Public> {
                     coins: Default::default(),
                     owned_addresses: vec![address],
                 }],
+                unused: Default::default(),
             };
 
             // run

@@ -30,6 +30,7 @@ pub struct ReadOnlyExecutionRequest {
     pub bytecode: Vec<u8>,
     /// Call stack to simulate, older caller first
     pub call_stack: Vec<ExecutionStackElement>,
+    pub unused: Vec<ExecutionStackElement>,
 }
 
 /// Structure describing an element of the execution stack.
