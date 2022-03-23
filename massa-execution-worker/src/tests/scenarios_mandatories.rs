@@ -83,6 +83,7 @@ fn test_sending_read_only_execution_command() {
             simulated_gas_price: Amount::from_raw(1_000_000 * AMOUNT_DECIMAL_FACTOR),
             bytecode: include_bytes!("./event_test.wasm").to_vec(),
             call_stack: vec![],
+            unused: Default::default(),
         })
         .unwrap();
     manager.stop()
