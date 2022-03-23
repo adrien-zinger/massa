@@ -1,104 +1,107 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `massa-api&#x2F;src&#x2F;public.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>public.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceSerif4-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../FiraSans-Regular.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../FiraSans-Medium.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceCodePro-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceSerif4-Bold.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceCodePro-Semibold.ttf.woff2"><link rel="stylesheet" type="text/css" href="../../normalize.css"><link rel="stylesheet" type="text/css" href="../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" type="text/css" href="../../ayu.css" disabled><link rel="stylesheet" type="text/css" href="../../dark.css" disabled><link rel="stylesheet" type="text/css" href="../../light.css" id="themeStyle"><script id="default-settings" ></script><script src="../../storage.js"></script><script src="../../crates.js"></script><script defer src="../../main.js"></script><script defer src="../../source-script.js"></script><script defer src="../../source-files.js"></script>
-    <noscript><link rel="stylesheet" href="../../noscript.css"></noscript><link rel="alternate icon" type="image/png" href="../../favicon-16x16.png"><link rel="alternate icon" type="image/png" href="../../favicon-32x32.png"><link rel="icon" type="image/svg+xml" href="../../favicon.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="sidebar-menu" role="button">&#9776;</div><a class="sidebar-logo" href="../../massa_api/index.html"><div class="logo-container"><img class="rust-logo" src="../../rust-logo.png" alt="logo"></div>
-        </a></nav><main><div class="width-limiter"><div class="sub-container"><a class="sub-logo-container" href="../../massa_api/index.html"><img class="rust-logo" src="../../rust-logo.png" alt="logo"></a><nav class="sub"><div class="theme-picker"><button id="theme-picker" aria-label="Pick another theme!" aria-haspopup="menu" title="themes"><img width="18" height="18" alt="Pick another theme!" src="../../brush.svg"></button><div id="theme-choices" role="menu"></div></div><form class="search-form"><div class="search-container"><div><select id="crate-search"><option value="All crates">All crates</option></select><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"></div><button type="button" id="help-button" title="help">?</button><a id="settings-menu" href="../../settings.html" title="settings"><img width="18" height="18" alt="Change settings" src="../../wheel.svg"></a></div></form></nav></div><section id="main-content" class="content"><div class="example-wrap"><pre class="line-numbers"><span id="1">  1</span>
-<span id="2">  2</span>
-<span id="3">  3</span>
-<span id="4">  4</span>
-<span id="5">  5</span>
-<span id="6">  6</span>
-<span id="7">  7</span>
-<span id="8">  8</span>
-<span id="9">  9</span>
-<span id="10"> 10</span>
-<span id="11"> 11</span>
-<span id="12"> 12</span>
-<span id="13"> 13</span>
-<span id="14"> 14</span>
-<span id="15"> 15</span>
-<span id="16"> 16</span>
-<span id="17"> 17</span>
-<span id="18"> 18</span>
-<span id="19"> 19</span>
-<span id="20"> 20</span>
-<span id="21"> 21</span>
-<span id="22"> 22</span>
-<span id="23"> 23</span>
-<span id="24"> 24</span>
-<span id="25"> 25</span>
-<span id="26"> 26</span>
-<span id="27"> 27</span>
-<span id="28"> 28</span>
-<span id="29"> 29</span>
-<span id="30"> 30</span>
-<span id="31"> 31</span>
-<span id="32"> 32</span>
-<span id="33"> 33</span>
-<span id="34"> 34</span>
-<span id="35"> 35</span>
-<span id="36"> 36</span>
-<span id="37"> 37</span>
-<span id="38"> 38</span>
-<span id="39"> 39</span>
-<span id="40"> 40</span>
-<span id="41"> 41</span>
-<span id="42"> 42</span>
-<span id="43"> 43</span>
-<span id="44"> 44</span>
-<span id="45"> 45</span>
-<span id="46"> 46</span>
-<span id="47"> 47</span>
-<span id="48"> 48</span>
-<span id="49"> 49</span>
-<span id="50"> 50</span>
-<span id="51"> 51</span>
-<span id="52"> 52</span>
-<span id="53"> 53</span>
-<span id="54"> 54</span>
-<span id="55"> 55</span>
-<span id="56"> 56</span>
-<span id="57"> 57</span>
-<span id="58"> 58</span>
-<span id="59"> 59</span>
-<span id="60"> 60</span>
-<span id="61"> 61</span>
-<span id="62"> 62</span>
-<span id="63"> 63</span>
-<span id="64"> 64</span>
-<span id="65"> 65</span>
-<span id="66"> 66</span>
-<span id="67"> 67</span>
-<span id="68"> 68</span>
-<span id="69"> 69</span>
-<span id="70"> 70</span>
-<span id="71"> 71</span>
-<span id="72"> 72</span>
-<span id="73"> 73</span>
-<span id="74"> 74</span>
-<span id="75"> 75</span>
-<span id="76"> 76</span>
-<span id="77"> 77</span>
-<span id="78"> 78</span>
-<span id="79"> 79</span>
-<span id="80"> 80</span>
-<span id="81"> 81</span>
-<span id="82"> 82</span>
-<span id="83"> 83</span>
-<span id="84"> 84</span>
-<span id="85"> 85</span>
-<span id="86"> 86</span>
-<span id="87"> 87</span>
-<span id="88"> 88</span>
-<span id="89"> 89</span>
-<span id="90"> 90</span>
-<span id="91"> 91</span>
-<span id="92"> 92</span>
-<span id="93"> 93</span>
-<span id="94"> 94</span>
-<span id="95"> 95</span>
-<span id="96"> 96</span>
-<span id="97"> 97</span>
-<span id="98"> 98</span>
-<span id="99"> 99</span>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `massa-api/src/public.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>public.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceSerif4-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../FiraSans-Regular.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../FiraSans-Medium.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceCodePro-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceSerif4-Bold.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceCodePro-Semibold.ttf.woff2"><link rel="stylesheet" type="text/css" href="../../normalize.css"><link rel="stylesheet" type="text/css" href="../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" type="text/css" href="../../ayu.css" disabled><link rel="stylesheet" type="text/css" href="../../dark.css" disabled><link rel="stylesheet" type="text/css" href="../../light.css" id="themeStyle"><script id="default-settings" ></script><script src="../../storage.js"></script><script src="../../crates.js"></script><script defer src="../../main.js"></script><script defer src="../../source-script.js"></script><script defer src="../../source-files.js"></script>
+    <noscript><link rel="stylesheet" href="../../noscript.css"></noscript><link rel="alternate icon" type="image/png" href="../../favicon-16x16.png"><link rel="alternate icon" type="image/png" href="../../favicon-32x32.png"><link rel="icon" type="image/svg+xml" href="../../favicon.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button><a class="sidebar-logo" href="../../massa_api/index.html"><div class="logo-container"><img class="rust-logo" src="../../rust-logo.svg" alt="logo"></div>
+        </a><h2 class="location"></h2>
+    </nav>
+    <nav class="sidebar"><a class="sidebar-logo" href="../../massa_api/index.html"><div class="logo-container"><img class="rust-logo" src="../../rust-logo.svg" alt="logo"></div>
+        </a></nav><main><div class="width-limiter"><div class="sub-container"><a class="sub-logo-container" href="../../massa_api/index.html"><img class="rust-logo" src="../../rust-logo.svg" alt="logo"></a><nav class="sub"><div class="theme-picker hidden"><button id="theme-picker" aria-label="Pick another theme!" aria-haspopup="menu" title="themes"><img width="22" height="22" alt="Pick another theme!" src="../../brush.svg"></button><div id="theme-choices" role="menu"></div></div><form class="search-form"><div class="search-container"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><button type="button" id="help-button" title="help">?</button><a id="settings-menu" href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../wheel.svg"></a></div></form></nav></div><section id="main-content" class="content"><div class="example-wrap"><pre class="line-numbers"><span id="1">1</span>
+<span id="2">2</span>
+<span id="3">3</span>
+<span id="4">4</span>
+<span id="5">5</span>
+<span id="6">6</span>
+<span id="7">7</span>
+<span id="8">8</span>
+<span id="9">9</span>
+<span id="10">10</span>
+<span id="11">11</span>
+<span id="12">12</span>
+<span id="13">13</span>
+<span id="14">14</span>
+<span id="15">15</span>
+<span id="16">16</span>
+<span id="17">17</span>
+<span id="18">18</span>
+<span id="19">19</span>
+<span id="20">20</span>
+<span id="21">21</span>
+<span id="22">22</span>
+<span id="23">23</span>
+<span id="24">24</span>
+<span id="25">25</span>
+<span id="26">26</span>
+<span id="27">27</span>
+<span id="28">28</span>
+<span id="29">29</span>
+<span id="30">30</span>
+<span id="31">31</span>
+<span id="32">32</span>
+<span id="33">33</span>
+<span id="34">34</span>
+<span id="35">35</span>
+<span id="36">36</span>
+<span id="37">37</span>
+<span id="38">38</span>
+<span id="39">39</span>
+<span id="40">40</span>
+<span id="41">41</span>
+<span id="42">42</span>
+<span id="43">43</span>
+<span id="44">44</span>
+<span id="45">45</span>
+<span id="46">46</span>
+<span id="47">47</span>
+<span id="48">48</span>
+<span id="49">49</span>
+<span id="50">50</span>
+<span id="51">51</span>
+<span id="52">52</span>
+<span id="53">53</span>
+<span id="54">54</span>
+<span id="55">55</span>
+<span id="56">56</span>
+<span id="57">57</span>
+<span id="58">58</span>
+<span id="59">59</span>
+<span id="60">60</span>
+<span id="61">61</span>
+<span id="62">62</span>
+<span id="63">63</span>
+<span id="64">64</span>
+<span id="65">65</span>
+<span id="66">66</span>
+<span id="67">67</span>
+<span id="68">68</span>
+<span id="69">69</span>
+<span id="70">70</span>
+<span id="71">71</span>
+<span id="72">72</span>
+<span id="73">73</span>
+<span id="74">74</span>
+<span id="75">75</span>
+<span id="76">76</span>
+<span id="77">77</span>
+<span id="78">78</span>
+<span id="79">79</span>
+<span id="80">80</span>
+<span id="81">81</span>
+<span id="82">82</span>
+<span id="83">83</span>
+<span id="84">84</span>
+<span id="85">85</span>
+<span id="86">86</span>
+<span id="87">87</span>
+<span id="88">88</span>
+<span id="89">89</span>
+<span id="90">90</span>
+<span id="91">91</span>
+<span id="92">92</span>
+<span id="93">93</span>
+<span id="94">94</span>
+<span id="95">95</span>
+<span id="96">96</span>
+<span id="97">97</span>
+<span id="98">98</span>
+<span id="99">99</span>
 <span id="100">100</span>
 <span id="101">101</span>
 <span id="102">102</span>
@@ -487,36 +490,210 @@
 <span id="485">485</span>
 <span id="486">486</span>
 <span id="487">487</span>
-</pre><pre class="rust"><code><span class="comment">// Copyright (c) 2021 MASSA LABS &lt;info@massa.net&gt;</span>
+<span id="488">488</span>
+<span id="489">489</span>
+<span id="490">490</span>
+<span id="491">491</span>
+<span id="492">492</span>
+<span id="493">493</span>
+<span id="494">494</span>
+<span id="495">495</span>
+<span id="496">496</span>
+<span id="497">497</span>
+<span id="498">498</span>
+<span id="499">499</span>
+<span id="500">500</span>
+<span id="501">501</span>
+<span id="502">502</span>
+<span id="503">503</span>
+<span id="504">504</span>
+<span id="505">505</span>
+<span id="506">506</span>
+<span id="507">507</span>
+<span id="508">508</span>
+<span id="509">509</span>
+<span id="510">510</span>
+<span id="511">511</span>
+<span id="512">512</span>
+<span id="513">513</span>
+<span id="514">514</span>
+<span id="515">515</span>
+<span id="516">516</span>
+<span id="517">517</span>
+<span id="518">518</span>
+<span id="519">519</span>
+<span id="520">520</span>
+<span id="521">521</span>
+<span id="522">522</span>
+<span id="523">523</span>
+<span id="524">524</span>
+<span id="525">525</span>
+<span id="526">526</span>
+<span id="527">527</span>
+<span id="528">528</span>
+<span id="529">529</span>
+<span id="530">530</span>
+<span id="531">531</span>
+<span id="532">532</span>
+<span id="533">533</span>
+<span id="534">534</span>
+<span id="535">535</span>
+<span id="536">536</span>
+<span id="537">537</span>
+<span id="538">538</span>
+<span id="539">539</span>
+<span id="540">540</span>
+<span id="541">541</span>
+<span id="542">542</span>
+<span id="543">543</span>
+<span id="544">544</span>
+<span id="545">545</span>
+<span id="546">546</span>
+<span id="547">547</span>
+<span id="548">548</span>
+<span id="549">549</span>
+<span id="550">550</span>
+<span id="551">551</span>
+<span id="552">552</span>
+<span id="553">553</span>
+<span id="554">554</span>
+<span id="555">555</span>
+<span id="556">556</span>
+<span id="557">557</span>
+<span id="558">558</span>
+<span id="559">559</span>
+<span id="560">560</span>
+<span id="561">561</span>
+<span id="562">562</span>
+<span id="563">563</span>
+<span id="564">564</span>
+<span id="565">565</span>
+<span id="566">566</span>
+<span id="567">567</span>
+<span id="568">568</span>
+<span id="569">569</span>
+<span id="570">570</span>
+<span id="571">571</span>
+<span id="572">572</span>
+<span id="573">573</span>
+<span id="574">574</span>
+<span id="575">575</span>
+<span id="576">576</span>
+<span id="577">577</span>
+<span id="578">578</span>
+<span id="579">579</span>
+<span id="580">580</span>
+<span id="581">581</span>
+<span id="582">582</span>
+<span id="583">583</span>
+<span id="584">584</span>
+<span id="585">585</span>
+<span id="586">586</span>
+<span id="587">587</span>
+<span id="588">588</span>
+<span id="589">589</span>
+<span id="590">590</span>
+<span id="591">591</span>
+<span id="592">592</span>
+<span id="593">593</span>
+<span id="594">594</span>
+<span id="595">595</span>
+<span id="596">596</span>
+<span id="597">597</span>
+<span id="598">598</span>
+<span id="599">599</span>
+<span id="600">600</span>
+<span id="601">601</span>
+<span id="602">602</span>
+<span id="603">603</span>
+<span id="604">604</span>
+<span id="605">605</span>
+<span id="606">606</span>
+<span id="607">607</span>
+<span id="608">608</span>
+<span id="609">609</span>
+<span id="610">610</span>
+<span id="611">611</span>
+<span id="612">612</span>
+<span id="613">613</span>
+<span id="614">614</span>
+<span id="615">615</span>
+<span id="616">616</span>
+<span id="617">617</span>
+<span id="618">618</span>
+<span id="619">619</span>
+<span id="620">620</span>
+<span id="621">621</span>
+<span id="622">622</span>
+<span id="623">623</span>
+<span id="624">624</span>
+<span id="625">625</span>
+<span id="626">626</span>
+<span id="627">627</span>
+<span id="628">628</span>
+<span id="629">629</span>
+<span id="630">630</span>
+<span id="631">631</span>
+<span id="632">632</span>
+<span id="633">633</span>
+<span id="634">634</span>
+<span id="635">635</span>
+<span id="636">636</span>
+<span id="637">637</span>
+<span id="638">638</span>
+<span id="639">639</span>
+<span id="640">640</span>
+<span id="641">641</span>
+<span id="642">642</span>
+<span id="643">643</span>
+<span id="644">644</span>
+<span id="645">645</span>
+<span id="646">646</span>
+<span id="647">647</span>
+<span id="648">648</span>
+<span id="649">649</span>
+<span id="650">650</span>
+<span id="651">651</span>
+<span id="652">652</span>
+</pre><pre class="rust"><code><span class="comment">// Copyright (c) 2022 MASSA LABS &lt;info@massa.net&gt;</span>
 <span class="attribute">#![<span class="ident">allow</span>(<span class="ident">clippy::too_many_arguments</span>)]</span>
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::error::ApiError</span>;
 <span class="kw">use</span> <span class="kw">crate</span>::{<span class="ident">Endpoints</span>, <span class="ident">Public</span>, <span class="ident">RpcServer</span>, <span class="ident">StopHandle</span>, <span class="ident">API</span>};
 <span class="kw">use</span> <span class="ident">futures</span>::{<span class="ident">stream::FuturesUnordered</span>, <span class="ident">StreamExt</span>};
 <span class="kw">use</span> <span class="ident">jsonrpc_core::BoxFuture</span>;
-<span class="kw">use</span> <span class="ident">massa_consensus</span>::{<span class="ident">ConsensusCommandSender</span>, <span class="ident">ConsensusConfig</span>, <span class="ident">DiscardReason</span>, <span class="ident">ExportBlockStatus</span>};
-<span class="kw">use</span> <span class="ident">massa_models::address</span>::{<span class="ident">AddressHashMap</span>, <span class="ident">AddressHashSet</span>};
-<span class="kw">use</span> <span class="ident">massa_models::api</span>::{
-    <span class="ident">APISettings</span>, <span class="ident">AddressInfo</span>, <span class="ident">BlockInfo</span>, <span class="ident">BlockInfoContent</span>, <span class="ident">BlockSummary</span>, <span class="ident">EndorsementInfo</span>,
-    <span class="ident">IndexedSlot</span>, <span class="ident">NodeStatus</span>, <span class="ident">OperationInfo</span>, <span class="ident">TimeInterval</span>,
+<span class="kw">use</span> <span class="ident">massa_consensus_exports</span>::{<span class="ident">ConsensusCommandSender</span>, <span class="ident">ConsensusConfig</span>};
+<span class="kw">use</span> <span class="ident">massa_execution_exports</span>::{
+    <span class="ident">ExecutionController</span>, <span class="ident">ExecutionStackElement</span>, <span class="ident">ReadOnlyExecutionRequest</span>,
 };
-<span class="kw">use</span> <span class="ident">massa_models::clique::Clique</span>;
-<span class="kw">use</span> <span class="ident">massa_models::hhasher::BuildHHasher</span>;
-<span class="kw">use</span> <span class="ident">massa_models::massa_hash::PubkeySig</span>;
-<span class="kw">use</span> <span class="ident">massa_models::node::NodeId</span>;
-<span class="kw">use</span> <span class="ident">massa_models::timeslots</span>::{<span class="ident">get_latest_block_slot_at_timestamp</span>, <span class="ident">time_range_to_slot_range</span>};
+<span class="kw">use</span> <span class="ident">massa_graph</span>::{<span class="ident">DiscardReason</span>, <span class="ident">ExportBlockStatus</span>};
+<span class="kw">use</span> <span class="ident">massa_models::api::SCELedgerInfo</span>;
+<span class="kw">use</span> <span class="ident">massa_models::execution::ReadOnlyResult</span>;
+<span class="kw">use</span> <span class="ident">massa_models::SignedOperation</span>;
+
 <span class="kw">use</span> <span class="ident">massa_models</span>::{
-    <span class="ident">Address</span>, <span class="ident">BlockHashSet</span>, <span class="ident">BlockId</span>, <span class="ident">EndorsementHashSet</span>, <span class="ident">EndorsementId</span>, <span class="ident">Operation</span>, <span class="ident">OperationHashMap</span>,
-    <span class="ident">OperationHashSet</span>, <span class="ident">OperationId</span>, <span class="ident">Slot</span>, <span class="ident">Version</span>,
+    <span class="ident">api</span>::{
+        <span class="ident">APISettings</span>, <span class="ident">AddressInfo</span>, <span class="ident">BlockInfo</span>, <span class="ident">BlockInfoContent</span>, <span class="ident">BlockSummary</span>, <span class="ident">EndorsementInfo</span>,
+        <span class="ident">EventFilter</span>, <span class="ident">IndexedSlot</span>, <span class="ident">NodeStatus</span>, <span class="ident">OperationInfo</span>, <span class="ident">ReadOnlyExecution</span>, <span class="ident">TimeInterval</span>,
+    },
+    <span class="ident">clique::Clique</span>,
+    <span class="ident">composite::PubkeySig</span>,
+    <span class="ident">execution::ExecuteReadOnlyResponse</span>,
+    <span class="ident">node::NodeId</span>,
+    <span class="ident">output_event::SCOutputEvent</span>,
+    <span class="ident">prehash</span>::{<span class="ident">BuildMap</span>, <span class="ident">Map</span>, <span class="ident">Set</span>},
+    <span class="ident">timeslots</span>::{<span class="ident">get_latest_block_slot_at_timestamp</span>, <span class="ident">time_range_to_slot_range</span>},
+    <span class="ident">Address</span>, <span class="ident">BlockId</span>, <span class="ident">CompactConfig</span>, <span class="ident">EndorsementId</span>, <span class="ident">OperationId</span>, <span class="ident">Slot</span>, <span class="ident">Version</span>,
 };
-<span class="kw">use</span> <span class="ident">massa_network</span>::{<span class="ident">NetworkCommandSender</span>, <span class="ident">NetworkSettings</span>};
+<span class="kw">use</span> <span class="ident">massa_network_exports</span>::{<span class="ident">NetworkCommandSender</span>, <span class="ident">NetworkSettings</span>};
 <span class="kw">use</span> <span class="ident">massa_pool::PoolCommandSender</span>;
-<span class="kw">use</span> <span class="ident">massa_signature::PrivateKey</span>;
+<span class="kw">use</span> <span class="ident">massa_signature</span>::{<span class="ident">derive_public_key</span>, <span class="ident">generate_random_private_key</span>, <span class="ident">PrivateKey</span>};
 <span class="kw">use</span> <span class="ident">massa_time::MassaTime</span>;
 <span class="kw">use</span> <span class="ident">std::net</span>::{<span class="ident">IpAddr</span>, <span class="ident">SocketAddr</span>};
 
 <span class="kw">impl</span> <span class="ident">API</span><span class="op">&lt;</span><span class="ident">Public</span><span class="op">&gt;</span> {
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new</span>(
         <span class="ident">consensus_command_sender</span>: <span class="ident">ConsensusCommandSender</span>,
+        <span class="ident">execution_controller</span>: <span class="ident">Box</span><span class="op">&lt;</span><span class="kw">dyn</span> <span class="ident">ExecutionController</span><span class="op">&gt;</span>,
         <span class="ident">api_settings</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static</span> <span class="ident">APISettings</span>,
         <span class="ident">consensus_settings</span>: <span class="ident">ConsensusConfig</span>,
         <span class="ident">pool_command_sender</span>: <span class="ident">PoolCommandSender</span>,
@@ -536,6 +713,7 @@
             <span class="ident">network_command_sender</span>,
             <span class="ident">compensation_millis</span>,
             <span class="ident">node_id</span>,
+            <span class="ident">execution_controller</span>,
         })
     }
 }
@@ -560,12 +738,73 @@
         <span class="ident"><span class="kw">crate</span>::wrong_api</span>::<span class="op">&lt;</span>()<span class="op">&gt;</span>()
     }
 
+    <span class="kw">fn</span> <span class="ident">execute_read_only_request</span>(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        <span class="ident">reqs</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">ReadOnlyExecution</span><span class="op">&gt;</span>,
+    ) -&gt; <span class="ident">BoxFuture</span><span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">ExecuteReadOnlyResponse</span><span class="op">&gt;</span>, <span class="ident">ApiError</span><span class="op">&gt;</span><span class="op">&gt;</span> {
+        <span class="kw">if</span> <span class="ident">reqs</span>.<span class="ident">len</span>() <span class="op">&gt;</span> <span class="self">self</span>.<span class="number">0</span>.<span class="ident">api_settings</span>.<span class="ident">max_arguments</span> <span class="kw">as</span> <span class="ident">usize</span> {
+            <span class="kw">let</span> <span class="ident">closure</span> <span class="op">=</span>
+                <span class="kw">async</span> <span class="kw">move</span> <span class="op">|</span><span class="op">|</span> <span class="prelude-val">Err</span>(<span class="ident">ApiError::TooManyArguments</span>(<span class="string">&quot;too many arguments&quot;</span>.<span class="ident">into</span>()));
+            <span class="kw">return</span> <span class="ident">Box::pin</span>(<span class="ident">closure</span>());
+        }
+
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">res</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">ExecuteReadOnlyResponse</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">Vec::with_capacity</span>(<span class="ident">reqs</span>.<span class="ident">len</span>());
+        <span class="kw">for</span> <span class="ident">ReadOnlyExecution</span> {
+            <span class="ident">max_gas</span>,
+            <span class="ident">address</span>,
+            <span class="ident">simulated_gas_price</span>,
+            <span class="ident">bytecode</span>,
+        } <span class="kw">in</span> <span class="ident">reqs</span>
+        {
+            <span class="kw">let</span> <span class="ident">address</span> <span class="op">=</span> <span class="ident">address</span>.<span class="ident">unwrap_or_else</span>(<span class="op">|</span><span class="op">|</span> {
+                <span class="comment">// if no addr provided, use a random one</span>
+                <span class="ident">Address::from_public_key</span>(<span class="kw-2">&amp;</span><span class="ident">derive_public_key</span>(<span class="kw-2">&amp;</span><span class="ident">generate_random_private_key</span>()))
+            });
+
+            <span class="comment">// TODO:</span>
+            <span class="comment">// * set a maximum gas value for read-only executions to prevent attacks</span>
+            <span class="comment">// * stop mapping request and result, reuse execution&#39;s structures</span>
+            <span class="comment">// * remove async stuff</span>
+
+            <span class="comment">// translate request</span>
+            <span class="kw">let</span> <span class="ident">req</span> <span class="op">=</span> <span class="ident">ReadOnlyExecutionRequest</span> {
+                <span class="ident">max_gas</span>,
+                <span class="ident">simulated_gas_price</span>,
+                <span class="ident">bytecode</span>,
+                <span class="ident">call_stack</span>: <span class="macro">vec!</span>[<span class="ident">ExecutionStackElement</span> {
+                    <span class="ident">address</span>,
+                    <span class="ident">coins</span>: <span class="ident">Default::default</span>(),
+                    <span class="ident">owned_addresses</span>: <span class="macro">vec!</span>[<span class="ident">address</span>],
+                }],
+            };
+
+            <span class="comment">// run</span>
+            <span class="kw">let</span> <span class="ident">result</span> <span class="op">=</span> <span class="self">self</span>.<span class="number">0</span>.<span class="ident">execution_controller</span>.<span class="ident">execute_readonly_request</span>(<span class="ident">req</span>);
+
+            <span class="comment">// map result</span>
+            <span class="kw">let</span> <span class="ident">result</span> <span class="op">=</span> <span class="ident">ExecuteReadOnlyResponse</span> {
+                <span class="ident">executed_at</span>: <span class="ident">result</span>.<span class="ident">as_ref</span>().<span class="ident">map_or_else</span>(<span class="op">|</span><span class="kw">_</span><span class="op">|</span> <span class="ident">Slot::new</span>(<span class="number">0</span>, <span class="number">0</span>), <span class="op">|</span><span class="ident">v</span><span class="op">|</span> <span class="ident">v</span>.<span class="ident">slot</span>),
+                <span class="ident">result</span>: <span class="ident">result</span>.<span class="ident">as_ref</span>().<span class="ident">map_or_else</span>(
+                    <span class="op">|</span><span class="ident">err</span><span class="op">|</span> <span class="ident">ReadOnlyResult::Error</span>(<span class="macro">format!</span>(<span class="string">&quot;readonly call failed: {}&quot;</span>, <span class="ident">err</span>)),
+                    <span class="op">|</span><span class="kw">_</span><span class="op">|</span> <span class="ident">ReadOnlyResult::Ok</span>,
+                ),
+                <span class="ident">output_events</span>: <span class="ident">result</span>.<span class="ident">map_or_else</span>(<span class="op">|</span><span class="kw">_</span><span class="op">|</span> <span class="ident">Default::default</span>(), <span class="op">|</span><span class="ident">v</span><span class="op">|</span> <span class="ident">v</span>.<span class="ident">events</span>.<span class="ident">export</span>()),
+            };
+
+            <span class="ident">res</span>.<span class="ident">push</span>(<span class="ident">result</span>);
+        }
+
+        <span class="comment">// return result</span>
+        <span class="kw">let</span> <span class="ident">closure</span> <span class="op">=</span> <span class="kw">async</span> <span class="kw">move</span> <span class="op">|</span><span class="op">|</span> <span class="prelude-val">Ok</span>(<span class="ident">res</span>);
+        <span class="ident">Box::pin</span>(<span class="ident">closure</span>())
+    }
+
     <span class="kw">fn</span> <span class="ident">remove_staking_addresses</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw">_</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Address</span><span class="op">&gt;</span>) -&gt; <span class="ident">BoxFuture</span><span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="ident">ApiError</span><span class="op">&gt;</span><span class="op">&gt;</span> {
         <span class="ident"><span class="kw">crate</span>::wrong_api</span>::<span class="op">&lt;</span>()<span class="op">&gt;</span>()
     }
 
-    <span class="kw">fn</span> <span class="ident">get_staking_addresses</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">BoxFuture</span><span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">AddressHashSet</span>, <span class="ident">ApiError</span><span class="op">&gt;</span><span class="op">&gt;</span> {
-        <span class="ident"><span class="kw">crate</span>::wrong_api</span>::<span class="op">&lt;</span><span class="ident">AddressHashSet</span><span class="op">&gt;</span>()
+    <span class="kw">fn</span> <span class="ident">get_staking_addresses</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">BoxFuture</span><span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Set</span><span class="op">&lt;</span><span class="ident">Address</span><span class="op">&gt;</span>, <span class="ident">ApiError</span><span class="op">&gt;</span><span class="op">&gt;</span> {
+        <span class="ident"><span class="kw">crate</span>::wrong_api</span>::<span class="op">&lt;</span><span class="ident">Set</span><span class="op">&lt;</span><span class="ident">Address</span><span class="op">&gt;</span><span class="op">&gt;</span>()
     }
 
     <span class="kw">fn</span> <span class="ident">ban</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw">_</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">IpAddr</span><span class="op">&gt;</span>) -&gt; <span class="ident">BoxFuture</span><span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="ident">ApiError</span><span class="op">&gt;</span><span class="op">&gt;</span> {
@@ -585,7 +824,7 @@
         <span class="kw">let</span> <span class="ident">compensation_millis</span> <span class="op">=</span> <span class="self">self</span>.<span class="number">0</span>.<span class="ident">compensation_millis</span>;
         <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">pool_command_sender</span> <span class="op">=</span> <span class="self">self</span>.<span class="number">0</span>.<span class="ident">pool_command_sender</span>.<span class="ident">clone</span>();
         <span class="kw">let</span> <span class="ident">node_id</span> <span class="op">=</span> <span class="self">self</span>.<span class="number">0</span>.<span class="ident">node_id</span>;
-        <span class="kw">let</span> <span class="ident">config</span> <span class="op">=</span> <span class="ident">consensus_settings</span>.<span class="ident">compact_config</span>();
+        <span class="kw">let</span> <span class="ident">config</span> <span class="op">=</span> <span class="ident">CompactConfig::default</span>();
         <span class="kw">let</span> <span class="ident">closure</span> <span class="op">=</span> <span class="kw">async</span> <span class="kw">move</span> <span class="op">|</span><span class="op">|</span> {
             <span class="kw">let</span> <span class="ident">now</span> <span class="op">=</span> <span class="ident">MassaTime::compensated_now</span>(<span class="ident">compensation_millis</span>)<span class="question-mark">?</span>;
             <span class="kw">let</span> <span class="ident">last_slot</span> <span class="op">=</span> <span class="ident">get_latest_block_slot_at_timestamp</span>(
@@ -634,7 +873,7 @@
         <span class="ident">Box::pin</span>(<span class="ident">closure</span>())
     }
 
-    <span class="kw">fn</span> <span class="ident">get_stakers</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">BoxFuture</span><span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">AddressHashMap</span><span class="op">&lt;</span><span class="ident">u64</span><span class="op">&gt;</span>, <span class="ident">ApiError</span><span class="op">&gt;</span><span class="op">&gt;</span> {
+    <span class="kw">fn</span> <span class="ident">get_stakers</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">BoxFuture</span><span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Map</span><span class="op">&lt;</span><span class="ident">Address</span>, <span class="ident">u64</span><span class="op">&gt;</span>, <span class="ident">ApiError</span><span class="op">&gt;</span><span class="op">&gt;</span> {
         <span class="kw">let</span> <span class="ident">consensus_command_sender</span> <span class="op">=</span> <span class="self">self</span>.<span class="number">0</span>.<span class="ident">consensus_command_sender</span>.<span class="ident">clone</span>();
         <span class="kw">let</span> <span class="ident">closure</span> <span class="op">=</span> <span class="kw">async</span> <span class="kw">move</span> <span class="op">|</span><span class="op">|</span> <span class="prelude-val">Ok</span>(<span class="ident">consensus_command_sender</span>.<span class="ident">get_active_stakers</span>().<span class="kw">await</span><span class="question-mark">?</span>);
         <span class="ident">Box::pin</span>(<span class="ident">closure</span>())
@@ -652,7 +891,7 @@
                 <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">ApiError::TooManyArguments</span>(<span class="string">&quot;too many arguments&quot;</span>.<span class="ident">into</span>()));
             }
 
-            <span class="kw">let</span> <span class="ident">operation_ids</span>: <span class="ident">OperationHashSet</span> <span class="op">=</span> <span class="ident">ops</span>.<span class="ident">iter</span>().<span class="ident">cloned</span>().<span class="ident">collect</span>();
+            <span class="kw">let</span> <span class="ident">operation_ids</span>: <span class="ident">Set</span><span class="op">&lt;</span><span class="ident">OperationId</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">ops</span>.<span class="ident">iter</span>().<span class="ident">cloned</span>().<span class="ident">collect</span>();
 
             <span class="comment">// simultaneously ask pool and consensus</span>
             <span class="kw">let</span> (<span class="ident">pool_res</span>, <span class="ident">consensus_res</span>) <span class="op">=</span> <span class="macro">tokio::join!</span>(
@@ -660,11 +899,10 @@
                 <span class="ident">consensus_command_sender</span>.<span class="ident">get_operations</span>(<span class="ident">operation_ids</span>)
             );
             <span class="kw">let</span> (<span class="ident">pool_res</span>, <span class="ident">consensus_res</span>) <span class="op">=</span> (<span class="ident">pool_res</span><span class="question-mark">?</span>, <span class="ident">consensus_res</span><span class="question-mark">?</span>);
-            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">res</span>: <span class="ident">OperationHashMap</span><span class="op">&lt;</span><span class="ident">OperationInfo</span><span class="op">&gt;</span> <span class="op">=</span>
-                <span class="ident">OperationHashMap::with_capacity_and_hasher</span>(
-                    <span class="ident">pool_res</span>.<span class="ident">len</span>() <span class="op">+</span> <span class="ident">consensus_res</span>.<span class="ident">len</span>(),
-                    <span class="ident">BuildHHasher::default</span>(),
-                );
+            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">res</span>: <span class="ident">Map</span><span class="op">&lt;</span><span class="ident">OperationId</span>, <span class="ident">OperationInfo</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">Map::with_capacity_and_hasher</span>(
+                <span class="ident">pool_res</span>.<span class="ident">len</span>() <span class="op">+</span> <span class="ident">consensus_res</span>.<span class="ident">len</span>(),
+                <span class="ident">BuildMap::default</span>(),
+            );
 
             <span class="comment">// add pool info</span>
             <span class="ident">res</span>.<span class="ident">extend</span>(<span class="ident">pool_res</span>.<span class="ident">into_iter</span>().<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">id</span>, <span class="ident">operation</span>)<span class="op">|</span> {
@@ -713,7 +951,7 @@
         <span class="kw">let</span> <span class="ident">consensus_command_sender</span> <span class="op">=</span> <span class="self">self</span>.<span class="number">0</span>.<span class="ident">consensus_command_sender</span>.<span class="ident">clone</span>();
         <span class="kw">let</span> <span class="ident">pool_command_sender</span> <span class="op">=</span> <span class="self">self</span>.<span class="number">0</span>.<span class="ident">pool_command_sender</span>.<span class="ident">clone</span>();
         <span class="kw">let</span> <span class="ident">closure</span> <span class="op">=</span> <span class="kw">async</span> <span class="kw">move</span> <span class="op">|</span><span class="op">|</span> {
-            <span class="kw">let</span> <span class="ident">mapped</span>: <span class="ident">EndorsementHashSet</span> <span class="op">=</span> <span class="ident">eds</span>.<span class="ident">into_iter</span>().<span class="ident">collect</span>();
+            <span class="kw">let</span> <span class="ident">mapped</span>: <span class="ident">Set</span><span class="op">&lt;</span><span class="ident">EndorsementId</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">eds</span>.<span class="ident">into_iter</span>().<span class="ident">collect</span>();
             <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">res</span> <span class="op">=</span> <span class="ident">consensus_command_sender</span>
                 .<span class="ident">get_endorsements_by_id</span>(<span class="ident">mapped</span>.<span class="ident">clone</span>())
                 .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -804,7 +1042,7 @@
                     <span class="ident">is_stale</span>: <span class="bool-val">false</span>,
                     <span class="ident">is_in_blockclique</span>: <span class="ident">blockclique</span>.<span class="ident">block_ids</span>.<span class="ident">contains</span>(<span class="kw-2">&amp;</span><span class="ident">id</span>),
                     <span class="ident">slot</span>: <span class="ident">exported_block</span>.<span class="ident">header</span>.<span class="ident">content</span>.<span class="ident">slot</span>,
-                    <span class="ident">creator</span>: <span class="ident">Address::from_public_key</span>(<span class="kw-2">&amp;</span><span class="ident">exported_block</span>.<span class="ident">header</span>.<span class="ident">content</span>.<span class="ident">creator</span>)<span class="question-mark">?</span>,
+                    <span class="ident">creator</span>: <span class="ident">Address::from_public_key</span>(<span class="kw-2">&amp;</span><span class="ident">exported_block</span>.<span class="ident">header</span>.<span class="ident">content</span>.<span class="ident">creator</span>),
                     <span class="ident">parents</span>: <span class="ident">exported_block</span>.<span class="ident">header</span>.<span class="ident">content</span>.<span class="ident">parents</span>,
                 });
             }
@@ -816,7 +1054,7 @@
                         <span class="ident">is_stale</span>: <span class="bool-val">true</span>,
                         <span class="ident">is_in_blockclique</span>: <span class="bool-val">false</span>,
                         <span class="ident">slot</span>: <span class="ident">header</span>.<span class="ident">content</span>.<span class="ident">slot</span>,
-                        <span class="ident">creator</span>: <span class="ident">Address::from_public_key</span>(<span class="kw-2">&amp;</span><span class="ident">header</span>.<span class="ident">content</span>.<span class="ident">creator</span>)<span class="question-mark">?</span>,
+                        <span class="ident">creator</span>: <span class="ident">Address::from_public_key</span>(<span class="kw-2">&amp;</span><span class="ident">header</span>.<span class="ident">content</span>.<span class="ident">creator</span>),
                         <span class="ident">parents</span>: <span class="ident">header</span>.<span class="ident">content</span>.<span class="ident">parents</span>,
                     });
                 }
@@ -834,14 +1072,16 @@
         <span class="kw">let</span> <span class="ident">cfg</span> <span class="op">=</span> <span class="self">self</span>.<span class="number">0</span>.<span class="ident">consensus_config</span>.<span class="ident">clone</span>();
         <span class="kw">let</span> <span class="ident">api_cfg</span> <span class="op">=</span> <span class="self">self</span>.<span class="number">0</span>.<span class="ident">api_settings</span>;
         <span class="kw">let</span> <span class="ident">pool_command_sender</span> <span class="op">=</span> <span class="self">self</span>.<span class="number">0</span>.<span class="ident">pool_command_sender</span>.<span class="ident">clone</span>();
+        <span class="kw">let</span> <span class="ident">execution_controller</span> <span class="op">=</span> <span class="self">self</span>.<span class="number">0</span>.<span class="ident">execution_controller</span>.<span class="ident">clone</span>();
         <span class="kw">let</span> <span class="ident">compensation_millis</span> <span class="op">=</span> <span class="self">self</span>.<span class="number">0</span>.<span class="ident">compensation_millis</span>;
+
         <span class="kw">let</span> <span class="ident">closure</span> <span class="op">=</span> <span class="kw">async</span> <span class="kw">move</span> <span class="op">|</span><span class="op">|</span> {
+            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">res</span> <span class="op">=</span> <span class="ident">Vec::with_capacity</span>(<span class="ident">addresses</span>.<span class="ident">len</span>());
+
+            <span class="comment">// check for address length</span>
             <span class="kw">if</span> <span class="ident">addresses</span>.<span class="ident">len</span>() <span class="kw">as</span> <span class="ident">u64</span> <span class="op">&gt;</span> <span class="ident">api_cfg</span>.<span class="ident">max_arguments</span> {
                 <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">ApiError::TooManyArguments</span>(<span class="string">&quot;too many arguments&quot;</span>.<span class="ident">into</span>()));
             }
-
-            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">res</span> <span class="op">=</span> <span class="ident">Vec::with_capacity</span>(<span class="ident">addresses</span>.<span class="ident">len</span>());
-
             <span class="comment">// next draws info</span>
             <span class="kw">let</span> <span class="ident">now</span> <span class="op">=</span> <span class="ident">MassaTime::compensated_now</span>(<span class="ident">compensation_millis</span>)<span class="question-mark">?</span>;
             <span class="kw">let</span> <span class="ident">current_slot</span> <span class="op">=</span> <span class="ident">get_latest_block_slot_at_timestamp</span>(
@@ -867,50 +1107,107 @@
             <span class="kw">let</span> (<span class="ident">next_draws</span>, <span class="kw-2">mut</span> <span class="ident">states</span>) <span class="op">=</span> (<span class="ident">next_draws</span><span class="question-mark">?</span>, <span class="ident">states</span><span class="question-mark">?</span>);
 
             <span class="comment">// operations block and endorsement info</span>
-            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">operations</span>: <span class="ident">AddressHashMap</span><span class="op">&lt;</span><span class="ident">OperationHashSet</span><span class="op">&gt;</span> <span class="op">=</span>
-                <span class="ident">AddressHashMap::with_capacity_and_hasher</span>(<span class="ident">addresses</span>.<span class="ident">len</span>(), <span class="ident">BuildHHasher::default</span>());
-            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">blocks</span>: <span class="ident">AddressHashMap</span><span class="op">&lt;</span><span class="ident">BlockHashSet</span><span class="op">&gt;</span> <span class="op">=</span>
-                <span class="ident">AddressHashMap::with_capacity_and_hasher</span>(<span class="ident">addresses</span>.<span class="ident">len</span>(), <span class="ident">BuildHHasher::default</span>());
-            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">endorsements</span>: <span class="ident">AddressHashMap</span><span class="op">&lt;</span><span class="ident">EndorsementHashSet</span><span class="op">&gt;</span> <span class="op">=</span>
-                <span class="ident">AddressHashMap::with_capacity_and_hasher</span>(<span class="ident">addresses</span>.<span class="ident">len</span>(), <span class="ident">BuildHHasher::default</span>());
+            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">operations</span>: <span class="ident">Map</span><span class="op">&lt;</span><span class="ident">Address</span>, <span class="ident">Set</span><span class="op">&lt;</span><span class="ident">OperationId</span><span class="op">&gt;</span><span class="op">&gt;</span> <span class="op">=</span>
+                <span class="ident">Map::with_capacity_and_hasher</span>(<span class="ident">addresses</span>.<span class="ident">len</span>(), <span class="ident">BuildMap::default</span>());
+            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">blocks</span>: <span class="ident">Map</span><span class="op">&lt;</span><span class="ident">Address</span>, <span class="ident">Set</span><span class="op">&lt;</span><span class="ident">BlockId</span><span class="op">&gt;</span><span class="op">&gt;</span> <span class="op">=</span>
+                <span class="ident">Map::with_capacity_and_hasher</span>(<span class="ident">addresses</span>.<span class="ident">len</span>(), <span class="ident">BuildMap::default</span>());
+            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">endorsements</span>: <span class="ident">Map</span><span class="op">&lt;</span><span class="ident">Address</span>, <span class="ident">Set</span><span class="op">&lt;</span><span class="ident">EndorsementId</span><span class="op">&gt;</span><span class="op">&gt;</span> <span class="op">=</span>
+                <span class="ident">Map::with_capacity_and_hasher</span>(<span class="ident">addresses</span>.<span class="ident">len</span>(), <span class="ident">BuildMap::default</span>());
+            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">final_sce_ledger_info</span>: <span class="ident">Map</span><span class="op">&lt;</span><span class="ident">Address</span>, <span class="ident">SCELedgerInfo</span><span class="op">&gt;</span> <span class="op">=</span>
+                <span class="ident">Map::with_capacity_and_hasher</span>(<span class="ident">addresses</span>.<span class="ident">len</span>(), <span class="ident">BuildMap::default</span>());
+            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">candidate_sce_ledger_info</span>: <span class="ident">Map</span><span class="op">&lt;</span><span class="ident">Address</span>, <span class="ident">SCELedgerInfo</span><span class="op">&gt;</span> <span class="op">=</span>
+                <span class="ident">Map::with_capacity_and_hasher</span>(<span class="ident">addresses</span>.<span class="ident">len</span>(), <span class="ident">BuildMap::default</span>());
 
             <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">concurrent_getters</span> <span class="op">=</span> <span class="ident">FuturesUnordered::new</span>();
             <span class="kw">for</span> <span class="kw-2">&amp;</span><span class="ident">address</span> <span class="kw">in</span> <span class="ident">addresses</span>.<span class="ident">iter</span>() {
                 <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">pool_cmd_snd</span> <span class="op">=</span> <span class="ident">pool_command_sender</span>.<span class="ident">clone</span>();
                 <span class="kw">let</span> <span class="ident">cmd_snd</span> <span class="op">=</span> <span class="ident">cmd_sender</span>.<span class="ident">clone</span>();
+                <span class="kw">let</span> <span class="ident">exec_snd</span> <span class="op">=</span> <span class="ident">execution_controller</span>.<span class="ident">clone</span>();
                 <span class="ident">concurrent_getters</span>.<span class="ident">push</span>(<span class="kw">async</span> <span class="kw">move</span> {
                     <span class="kw">let</span> <span class="ident">blocks</span> <span class="op">=</span> <span class="ident">cmd_snd</span>
                         .<span class="ident">get_block_ids_by_creator</span>(<span class="ident">address</span>)
                         .<span class="kw">await</span><span class="question-mark">?</span>
                         .<span class="ident">into_keys</span>()
-                        .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="ident">BlockHashSet</span><span class="op">&gt;</span>();
+                        .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="ident">Set</span><span class="op">&lt;</span><span class="ident">BlockId</span><span class="op">&gt;</span><span class="op">&gt;</span>();
+
                     <span class="kw">let</span> <span class="ident">get_pool_ops</span> <span class="op">=</span> <span class="ident">pool_cmd_snd</span>.<span class="ident">get_operations_involving_address</span>(<span class="ident">address</span>);
                     <span class="kw">let</span> <span class="ident">get_consensus_ops</span> <span class="op">=</span> <span class="ident">cmd_snd</span>.<span class="ident">get_operations_involving_address</span>(<span class="ident">address</span>);
                     <span class="kw">let</span> (<span class="ident">get_pool_ops</span>, <span class="ident">get_consensus_ops</span>) <span class="op">=</span>
                         <span class="macro">tokio::join!</span>(<span class="ident">get_pool_ops</span>, <span class="ident">get_consensus_ops</span>);
-                    <span class="kw">let</span> <span class="ident">gathered</span>: <span class="ident">OperationHashSet</span> <span class="op">=</span> <span class="ident">get_pool_ops</span><span class="question-mark">?</span>
+                    <span class="kw">let</span> <span class="ident">gathered</span>: <span class="ident">Set</span><span class="op">&lt;</span><span class="ident">OperationId</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">get_pool_ops</span><span class="question-mark">?</span>
                         .<span class="ident">into_keys</span>()
                         .<span class="ident">chain</span>(<span class="ident">get_consensus_ops</span><span class="question-mark">?</span>.<span class="ident">into_keys</span>())
                         .<span class="ident">collect</span>();
 
-                        <span class="kw">let</span> <span class="ident">get_pool_eds</span> <span class="op">=</span> <span class="ident">pool_cmd_snd</span>.<span class="ident">get_endorsements_by_address</span>(<span class="ident">address</span>);
-                        <span class="kw">let</span> <span class="ident">get_consensus_eds</span> <span class="op">=</span> <span class="ident">cmd_snd</span>.<span class="ident">get_endorsements_by_address</span>(<span class="ident">address</span>);
-                        <span class="kw">let</span> (<span class="ident">get_pool_eds</span>, <span class="ident">get_consensus_eds</span>) <span class="op">=</span>
-                            <span class="macro">tokio::join!</span>(<span class="ident">get_pool_eds</span>, <span class="ident">get_consensus_eds</span>);
-                        <span class="kw">let</span> <span class="ident">gathered_ed</span>: <span class="ident">EndorsementHashSet</span> <span class="op">=</span> <span class="ident">get_pool_eds</span><span class="question-mark">?</span>
-                            .<span class="ident">into_keys</span>()
-                            .<span class="ident">chain</span>(<span class="ident">get_consensus_eds</span><span class="question-mark">?</span>.<span class="ident">into_keys</span>())
-                            .<span class="ident">collect</span>();
-                    <span class="prelude-ty">Result</span>::<span class="op">&lt;</span>(<span class="ident">Address</span>, <span class="ident">BlockHashSet</span>, <span class="ident">OperationHashSet</span>, <span class="ident">EndorsementHashSet</span>), <span class="ident">ApiError</span><span class="op">&gt;</span><span class="ident">::Ok</span>((
-                        <span class="ident">address</span>, <span class="ident">blocks</span>, <span class="ident">gathered</span>, <span class="ident">gathered_ed</span>
+                    <span class="kw">let</span> <span class="ident">get_pool_eds</span> <span class="op">=</span> <span class="ident">pool_cmd_snd</span>.<span class="ident">get_endorsements_by_address</span>(<span class="ident">address</span>);
+                    <span class="kw">let</span> <span class="ident">get_consensus_eds</span> <span class="op">=</span> <span class="ident">cmd_snd</span>.<span class="ident">get_endorsements_by_address</span>(<span class="ident">address</span>);
+                    <span class="kw">let</span> (<span class="ident">get_pool_eds</span>, <span class="ident">get_consensus_eds</span>) <span class="op">=</span>
+                        <span class="macro">tokio::join!</span>(<span class="ident">get_pool_eds</span>, <span class="ident">get_consensus_eds</span>);
+                    <span class="kw">let</span> <span class="ident">gathered_ed</span>: <span class="ident">Set</span><span class="op">&lt;</span><span class="ident">EndorsementId</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">get_pool_eds</span><span class="question-mark">?</span>
+                        .<span class="ident">into_keys</span>()
+                        .<span class="ident">chain</span>(<span class="ident">get_consensus_eds</span><span class="question-mark">?</span>.<span class="ident">into_keys</span>())
+                        .<span class="ident">collect</span>();
+
+                    <span class="kw">let</span> (<span class="ident">final_sce</span>, <span class="ident">candidate_sce</span>) <span class="op">=</span>
+                        <span class="kw">match</span> <span class="ident">exec_snd</span>.<span class="ident">get_final_and_active_ledger_entry</span>(<span class="kw-2">&amp;</span><span class="ident">address</span>) {
+                            (<span class="prelude-val">None</span>, <span class="prelude-val">None</span>) =&gt; (<span class="ident">SCELedgerInfo::default</span>(), <span class="ident">SCELedgerInfo::default</span>()),
+                            (<span class="prelude-val">None</span>, <span class="prelude-val">Some</span>(<span class="ident">candidate</span>)) =&gt; (
+                                <span class="ident">SCELedgerInfo::default</span>(),
+                                <span class="ident">SCELedgerInfo</span> {
+                                    <span class="ident">balance</span>: <span class="ident">candidate</span>.<span class="ident">parallel_balance</span>,
+                                    <span class="ident">module</span>: <span class="ident">candidate</span>.<span class="ident">bytecode</span>,
+                                    <span class="ident">datastore</span>: <span class="ident">candidate</span>.<span class="ident">datastore</span>.<span class="ident">into_iter</span>().<span class="ident">collect</span>(),
+                                },
+                            ),
+                            (<span class="prelude-val">Some</span>(<span class="ident">final_entry</span>), <span class="prelude-val">None</span>) =&gt; (
+                                <span class="ident">SCELedgerInfo</span> {
+                                    <span class="ident">balance</span>: <span class="ident">final_entry</span>.<span class="ident">parallel_balance</span>,
+                                    <span class="ident">module</span>: <span class="ident">final_entry</span>.<span class="ident">bytecode</span>,
+                                    <span class="ident">datastore</span>: <span class="ident">final_entry</span>.<span class="ident">datastore</span>.<span class="ident">into_iter</span>().<span class="ident">collect</span>(),
+                                },
+                                <span class="ident">SCELedgerInfo::default</span>(),
+                            ),
+                            (<span class="prelude-val">Some</span>(<span class="ident">final_entry</span>), <span class="prelude-val">Some</span>(<span class="ident">candidate</span>)) =&gt; (
+                                <span class="ident">SCELedgerInfo</span> {
+                                    <span class="ident">balance</span>: <span class="ident">final_entry</span>.<span class="ident">parallel_balance</span>,
+                                    <span class="ident">module</span>: <span class="ident">final_entry</span>.<span class="ident">bytecode</span>,
+                                    <span class="ident">datastore</span>: <span class="ident">final_entry</span>.<span class="ident">datastore</span>.<span class="ident">into_iter</span>().<span class="ident">collect</span>(),
+                                },
+                                <span class="ident">SCELedgerInfo</span> {
+                                    <span class="ident">balance</span>: <span class="ident">candidate</span>.<span class="ident">parallel_balance</span>,
+                                    <span class="ident">module</span>: <span class="ident">candidate</span>.<span class="ident">bytecode</span>,
+                                    <span class="ident">datastore</span>: <span class="ident">candidate</span>.<span class="ident">datastore</span>.<span class="ident">into_iter</span>().<span class="ident">collect</span>(),
+                                },
+                            ),
+                        };
+
+                    <span class="prelude-ty">Result</span>::<span class="op">&lt;</span>
+                        (
+                            <span class="ident">Address</span>,
+                            <span class="ident">Set</span><span class="op">&lt;</span><span class="ident">BlockId</span><span class="op">&gt;</span>,
+                            <span class="ident">Set</span><span class="op">&lt;</span><span class="ident">OperationId</span><span class="op">&gt;</span>,
+                            <span class="ident">Set</span><span class="op">&lt;</span><span class="ident">EndorsementId</span><span class="op">&gt;</span>,
+                            <span class="ident">SCELedgerInfo</span>,
+                            <span class="ident">SCELedgerInfo</span>,
+                        ),
+                        <span class="ident">ApiError</span>,
+                    <span class="op">&gt;</span><span class="ident">::Ok</span>((
+                        <span class="ident">address</span>,
+                        <span class="ident">blocks</span>,
+                        <span class="ident">gathered</span>,
+                        <span class="ident">gathered_ed</span>,
+                        <span class="ident">final_sce</span>,
+                        <span class="ident">candidate_sce</span>,
                     ))
                 });
             }
             <span class="kw">while</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">res</span>) <span class="op">=</span> <span class="ident">concurrent_getters</span>.<span class="ident">next</span>().<span class="kw">await</span> {
-                <span class="kw">let</span> (<span class="ident">a</span>, <span class="ident">bl_set</span>, <span class="ident">op_set</span>, <span class="ident">ed_set</span>) <span class="op">=</span> <span class="ident">res</span><span class="question-mark">?</span>;
+                <span class="kw">let</span> (<span class="ident">a</span>, <span class="ident">bl_set</span>, <span class="ident">op_set</span>, <span class="ident">ed_set</span>, <span class="ident">final_sce</span>, <span class="ident">candidate_sce</span>) <span class="op">=</span> <span class="ident">res</span><span class="question-mark">?</span>;
                 <span class="ident">operations</span>.<span class="ident">insert</span>(<span class="ident">a</span>, <span class="ident">op_set</span>);
                 <span class="ident">blocks</span>.<span class="ident">insert</span>(<span class="ident">a</span>, <span class="ident">bl_set</span>);
                 <span class="ident">endorsements</span>.<span class="ident">insert</span>(<span class="ident">a</span>, <span class="ident">ed_set</span>);
+                <span class="ident">final_sce_ledger_info</span>.<span class="ident">insert</span>(<span class="ident">a</span>, <span class="ident">final_sce</span>);
+                <span class="ident">candidate_sce_ledger_info</span>.<span class="ident">insert</span>(<span class="ident">a</span>, <span class="ident">candidate_sce</span>);
             }
 
             <span class="comment">// compile everything per address</span>
@@ -946,6 +1243,12 @@
                         .<span class="ident">remove</span>(<span class="kw-2">&amp;</span><span class="ident">address</span>)
                         .<span class="ident">ok_or</span>(<span class="ident">ApiError::NotFound</span>)<span class="question-mark">?</span>,
                     <span class="ident">production_stats</span>: <span class="ident">state</span>.<span class="ident">production_stats</span>,
+                    <span class="ident">final_sce_ledger_info</span>: <span class="ident">final_sce_ledger_info</span>
+                        .<span class="ident">remove</span>(<span class="kw-2">&amp;</span><span class="ident">address</span>)
+                        .<span class="ident">ok_or</span>(<span class="ident">ApiError::NotFound</span>)<span class="question-mark">?</span>,
+                    <span class="ident">candidate_sce_ledger_info</span>: <span class="ident">candidate_sce_ledger_info</span>
+                        .<span class="ident">remove</span>(<span class="kw-2">&amp;</span><span class="ident">address</span>)
+                        .<span class="ident">ok_or</span>(<span class="ident">ApiError::NotFound</span>)<span class="question-mark">?</span>,
                 })
             }
             <span class="prelude-val">Ok</span>(<span class="ident">res</span>)
@@ -955,7 +1258,7 @@
 
     <span class="kw">fn</span> <span class="ident">send_operations</span>(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="ident">ops</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Operation</span><span class="op">&gt;</span>,
+        <span class="ident">ops</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">SignedOperation</span><span class="op">&gt;</span>,
     ) -&gt; <span class="ident">BoxFuture</span><span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">OperationId</span><span class="op">&gt;</span>, <span class="ident">ApiError</span><span class="op">&gt;</span><span class="op">&gt;</span> {
         <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">cmd_sender</span> <span class="op">=</span> <span class="self">self</span>.<span class="number">0</span>.<span class="ident">pool_command_sender</span>.<span class="ident">clone</span>();
         <span class="kw">let</span> <span class="ident">api_cfg</span> <span class="op">=</span> <span class="self">self</span>.<span class="number">0</span>.<span class="ident">api_settings</span>;
@@ -966,14 +1269,44 @@
             <span class="kw">let</span> <span class="ident">to_send</span> <span class="op">=</span> <span class="ident">ops</span>
                 .<span class="ident">into_iter</span>()
                 .<span class="ident">map</span>(<span class="op">|</span><span class="ident">op</span><span class="op">|</span> <span class="prelude-val">Ok</span>((<span class="ident">op</span>.<span class="ident">verify_integrity</span>()<span class="question-mark">?</span>, <span class="ident">op</span>)))
-                .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">OperationHashMap</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span>, <span class="ident">ApiError</span><span class="op">&gt;</span><span class="op">&gt;</span>()<span class="question-mark">?</span>;
+                .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Map</span><span class="op">&lt;</span><span class="ident">OperationId</span>, <span class="kw">_</span><span class="op">&gt;</span>, <span class="ident">ApiError</span><span class="op">&gt;</span><span class="op">&gt;</span>()<span class="question-mark">?</span>;
             <span class="kw">let</span> <span class="ident">ids</span> <span class="op">=</span> <span class="ident">to_send</span>.<span class="ident">keys</span>().<span class="ident">copied</span>().<span class="ident">collect</span>();
             <span class="ident">cmd_sender</span>.<span class="ident">add_operations</span>(<span class="ident">to_send</span>).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="prelude-val">Ok</span>(<span class="ident">ids</span>)
         };
         <span class="ident">Box::pin</span>(<span class="ident">closure</span>())
     }
+
+    <span class="doccomment">/// Get events optionnally filtered by:</span>
+    <span class="doccomment">/// * start slot</span>
+    <span class="doccomment">/// * end slot</span>
+    <span class="doccomment">/// * emitter address</span>
+    <span class="doccomment">/// * original caller address</span>
+    <span class="doccomment">/// * operation id</span>
+    <span class="kw">fn</span> <span class="ident">get_filtered_sc_output_event</span>(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        <span class="ident">EventFilter</span> {
+            <span class="ident">start</span>,
+            <span class="ident">end</span>,
+            <span class="ident">emitter_address</span>,
+            <span class="ident">original_caller_address</span>,
+            <span class="ident">original_operation_id</span>,
+        }: <span class="ident">EventFilter</span>,
+    ) -&gt; <span class="ident">BoxFuture</span><span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">SCOutputEvent</span><span class="op">&gt;</span>, <span class="ident">ApiError</span><span class="op">&gt;</span><span class="op">&gt;</span> {
+        <span class="comment">// get events</span>
+        <span class="kw">let</span> <span class="ident">events</span> <span class="op">=</span> <span class="self">self</span>.<span class="number">0</span>.<span class="ident">execution_controller</span>.<span class="ident">get_filtered_sc_output_event</span>(
+            <span class="ident">start</span>,
+            <span class="ident">end</span>,
+            <span class="ident">emitter_address</span>,
+            <span class="ident">original_caller_address</span>,
+            <span class="ident">original_operation_id</span>,
+        );
+
+        <span class="comment">// TODO get rid of the async part</span>
+        <span class="kw">let</span> <span class="ident">closure</span> <span class="op">=</span> <span class="kw">async</span> <span class="kw">move</span> <span class="op">|</span><span class="op">|</span> <span class="prelude-val">Ok</span>(<span class="ident">events</span>);
+        <span class="ident">Box::pin</span>(<span class="ident">closure</span>())
+    }
 }
 </code></pre></div>
-</section><section id="search" class="content hidden"></section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="massa_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.59.0-nightly (23f69235a 2021-12-20)" ></div>
+</section><section id="search" class="content hidden"></section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="massa_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.61.0-nightly (5f3700105 2022-03-22)" ></div>
 </body></html>
