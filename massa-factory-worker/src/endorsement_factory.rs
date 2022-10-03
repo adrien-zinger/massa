@@ -123,6 +123,14 @@ impl EndorsementFactoryWorker {
     }
 
     /// Process a slot: produce an endorsement at that slot if one of the managed keys is drawn.
+    ///
+    /// # Steps
+    /// 1. Get the selection of the current slot to process (should be the closest latest slot)
+    /// 2. If an address local is selected to produce qn endorsement, continue step 3, return otherwise
+    /// 3. find the block at the current slot
+    /// 4. create an endorsement with that block
+    /// 5. If another local address is selected, repeat step 4
+    /// 6. propagate all the endorsements created with the process
     fn process_slot(&mut self, slot: Slot) {
         // get endorsement producer addresses for that slot
         let producer_addrs = match self.channels.selector.get_selection(slot) {
@@ -213,7 +221,11 @@ impl EndorsementFactoryWorker {
         }
     }
 
-    /// main run loop of the endorsement creator thread
+    /// main run loop of the endorsement creator thread.
+    ///
+    /// # Frequency
+    /// The processing of a creation of a new endorsment is launched between
+    /// two creations of blocks.
     fn run(&mut self) {
         let mut prev_slot = None;
         loop {
